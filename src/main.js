@@ -7,7 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rrShape, slab, flat, faceBack } from './shapes.js';
 import { createDesk } from './desk.js';
 import { reel } from './reels.js';
-import { createPhone, createCard, outlineGeometry, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
+import { createPhone, createCard, outlineGeometry, loadIphone, paint, DEEP_BLUE_NIGHT, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import './style.css';
@@ -411,6 +411,22 @@ const ui = UI.getContext('2d');
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
 ph.display.material.map = uiTex; ph.display.material.needsUpdate = true;
 const rc = createCard(envTex), card = rc.card; phone.add(card);
+// swap the hand-built phone for the real model as soon as it loads; the procedural one stays as a fallback
+loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
+  paint(mats, DEEP_BLUE_NIGHT);
+  const keep = new Set([card]);
+  phone.children.forEach(c => { if (!keep.has(c) && !soundRings.includes(c)) c.visible = false; });
+  const oled = mats['OLED'];
+  if (oled){
+    // the model's screen UVs run right to left and use glTF's flipY = false
+    uiTex.flipY = false; uiTex.repeat.x = -1; uiTex.offset.x = 1; uiTex.needsUpdate = true;
+    oled.map = uiTex; oled.emissiveMap = uiTex; oled.emissive.setHex(0xffffff); oled.emissiveIntensity = .5; oled.color.setHex(0x000000); oled.needsUpdate = true;
+  }
+  // the front cover glass is near-mirror; tone its highlight down so the bloom doesn't flare
+  if (mats['Glass']){ mats['Glass'].roughness = .16; mats['Glass'].envMapIntensity = .35; }
+  if (oled){ oled.roughness = .42; oled.envMapIntensity = .15; }
+  phone.add(model);
+}).catch(e => console.warn('iPhone model failed, keeping the procedural one', e));
 const ATTACH = new THREE.Vector3(ph.magsafe[0], ph.magsafe[1], ph.backZ - CARD.d/2 - .0006);
 const soundRings = [0,1,2].map(() => {
   const r = faceBack(new THREE.Mesh(outlineGeometry(CARD.w, CARD.h, CARD.r, .005), new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.35,.55), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false})));
@@ -492,34 +508,63 @@ const LINES = [
 const QUERY = 'What did the dentist tell me?';
 const ANSWER = 'Floss every night, especially on the left side. Your next visit is March 3 at 9:30.';
 
+// iOS 26 in-call screen (Liquid Glass): teal-to-blue wash, glass buttons, a glass banner while Recents records
+function glass(x, y, w, h, r, fill = .14){
+  ui.save();
+  ui.fillStyle = `rgba(255,255,255,${fill})`; rr(x, y, w, h, r); ui.fill();
+  const hl = ui.createLinearGradient(0, y, 0, y + h); hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(.5, 'rgba(255,255,255,0)'); hl.addColorStop(1, 'rgba(255,255,255,.06)');
+  ui.fillStyle = hl; rr(x, y, w, h, r); ui.fill();
+  ui.strokeStyle = 'rgba(255,255,255,.34)'; ui.lineWidth = 1.6; rr(x + .8, y + .8, w - 1.6, h - 1.6, r); ui.stroke();
+  ui.restore();
+}
+// Material Symbols paths (Apache 2.0), 24×24 viewBox; close to Apple's SF Symbols at this size
+const ICON = {
+  speaker: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z',
+  facetime: 'M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z',
+  mute: 'M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z',
+  more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+  end: 'M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z'
+};
+const iconPaths = Object.fromEntries(Object.entries(ICON).map(([k, d]) => [k, new Path2D(d)]));
+const callIcons = Object.fromEntries(Object.keys(ICON).map(k => [k, (x, y, s = 40) => {
+  ui.save(); ui.translate(x - s/2, y - s/2); ui.scale(s/24, s/24);
+  if (k === 'facetime') ui.globalAlpha *= .45;
+  ui.fill(iconPaths[k]); ui.restore();
+}]));
+callIcons.keypad = (x, y) => { for (let i=0;i<3;i++) for (let j=0;j<3;j++){ ui.beginPath(); ui.arc(x + (i-1)*13, y + (j-1)*13, 5, 0, Math.PI*2); ui.fill(); } };
 function drawCall(rec, secs, t){
-  const g = ui.createLinearGradient(0,0,0,UH); g.addColorStop(0,'#26333f'); g.addColorStop(1,'#07090c');
-  ui.fillStyle = g; ui.fillRect(0,0,600,UH);
-  statusBar(true, rec);
-  ui.fillStyle = '#3e4c5b'; ui.beginPath(); ui.arc(300,300,92,0,Math.PI*2); ui.fill();
-  ui.fillStyle = '#fff'; ui.textAlign = 'center'; ui.font = `500 84px ${SF}`; ui.fillText('D', 300, 304);
-  ui.font = `500 60px ${SF}`; ui.fillText(CALL.name, 300, 460);
-  ui.fillStyle = 'rgba(255,255,255,.6)'; ui.font = `400 28px ${SF}`;
-  ui.fillText(`${CALL.sub} · ${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`, 300, 514);
+  const W = UW, H = UH, ky = H/1316;
+  const base = ui.createLinearGradient(0, 0, W*.4, H); base.addColorStop(0, '#3b7389'); base.addColorStop(.55, '#2c6c82'); base.addColorStop(1, '#0a5784');
+  ui.fillStyle = base; ui.fillRect(0, 0, W, H);
+  const blue = ui.createRadialGradient(W*1.05, -H*.05, 10, W*1.05, -H*.05, W*1.25); blue.addColorStop(0, 'rgba(24,46,150,.95)'); blue.addColorStop(1, 'rgba(24,46,150,0)');
+  ui.fillStyle = blue; ui.fillRect(0, 0, W, H);
+  const teal = ui.createRadialGradient(-W*.1, H*.62, 10, -W*.1, H*.62, W*.9); teal.addColorStop(0, 'rgba(60,150,150,.45)'); teal.addColorStop(1, 'rgba(60,150,150,0)');
+  ui.fillStyle = teal; ui.fillRect(0, 0, W, H);
+  statusBar(true, 1);
+  ui.textAlign = 'center'; ui.textBaseline = 'middle';
+  ui.fillStyle = 'rgba(230,236,242,.62)'; ui.font = `600 27px ${SF}`;
+  ui.fillText(`${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`, W/2, 186*ky);
+  ui.fillStyle = '#fff'; ui.font = `700 52px ${SF}`; ui.fillText(CALL.name, W/2, 240*ky);
+  // while the card records: a glass banner where iOS would offer to hold the call
   if (rec > 0){
     ui.globalAlpha = rec;
-    ui.fillStyle = 'rgba(255,181,71,.14)'; rr(128,566,344,58,29); ui.fill();
-    ui.strokeStyle = 'rgba(255,181,71,.7)'; ui.lineWidth = 2; ui.stroke();
-    ui.fillStyle = '#ffb547'; ui.beginPath(); ui.arc(162,595,8,0,Math.PI*2); ui.fill();
-    ui.font = `500 24px ${SF}`; ui.textAlign = 'left'; ui.fillText('Recording to Recents', 184, 596);
-    for (let i=0;i<14;i++){ const h = 6 + 26*Math.abs(Math.sin(i*1.7 + t*7))*(.4+.6*Math.abs(Math.sin(i*3.1+t*3))); rr(150+i*22, 680-h/2, 9, h, 4); ui.fill(); }
-    ui.globalAlpha = 1;
+    const bx = 44, by = 720*ky, bw = W - 88, bh = 118*ky;
+    glass(bx, by, bw, bh, 30);
+    ui.textAlign = 'left'; ui.fillStyle = '#fff'; ui.font = `600 26px ${SF}`; ui.fillText('Recording to Recents', bx + 30, by + bh*.38);
+    ui.fillStyle = 'rgba(255,255,255,.62)'; ui.font = `400 22px ${SF}`; ui.fillText('Transcript ready when you hang up.', bx + 30, by + bh*.68);
+    ui.fillStyle = '#ffb547';
+    for (let i=0;i<7;i++){ const h = 8 + 22*Math.abs(Math.sin(i*1.7 + t*7))*(.4 + .6*Math.abs(Math.sin(i*3.1 + t*3))); rr(bx + bw - 118 + i*13, by + bh/2 - h/2, 6, h, 3); ui.fill(); }
+    ui.globalAlpha = 1; ui.textAlign = 'center';
   }
-  const labels = ['mute','keypad','speaker','add call','FaceTime','contacts'];
-  ui.textAlign = 'center';
-  for (let i=0;i<6;i++){
-    const x = 150 + (i%3)*150, y = 820 + Math.floor(i/3)*175;
-    ui.fillStyle = 'rgba(255,255,255,.14)'; ui.beginPath(); ui.arc(x,y,56,0,Math.PI*2); ui.fill();
-    ui.fillStyle = 'rgba(255,255,255,.85)'; ui.beginPath(); ui.arc(x,y,9,0,Math.PI*2); ui.fill();
-    ui.fillStyle = 'rgba(255,255,255,.75)'; ui.font = `400 22px ${SF}`; ui.fillText(labels[i], x, y+86);
-  }
-  ui.fillStyle = '#ff3b30'; ui.beginPath(); ui.arc(300,1150,58,0,Math.PI*2); ui.fill();
-  ui.save(); ui.translate(300,1150); ui.rotate(Math.PI*.75); ui.fillStyle = '#fff'; rr(-30,-9,60,18,9); ui.fill(); ui.restore();
+  const buttons = [['speaker','Speaker'],['facetime','FaceTime'],['mute','Mute'],['more','More'],['end','End'],['keypad','Keypad']];
+  buttons.forEach(([icon, label], i) => {
+    const x = [118, 300, 482][i%3], y = (i < 3 ? 943 : 1135)*ky, r = 59;
+    if (icon === 'end'){ ui.fillStyle = '#e0322c'; ui.beginPath(); ui.arc(x, y, r, 0, Math.PI*2); ui.fill(); }
+    else { glass(x - r, y - r, r*2, r*2, r); }
+    ui.fillStyle = '#fff'; ui.strokeStyle = '#fff'; ui.globalAlpha = 1;
+    callIcons[icon](x, y, icon === 'end' ? 46 : 40); ui.globalAlpha = 1;
+    ui.fillStyle = '#fff'; ui.font = `500 22px ${SF}`; ui.fillText(label, x, y + r + 26);
+  });
 }
 function appHeader(sub){
   ui.fillStyle = '#0b0d10'; ui.fillRect(0,0,600,UH);
@@ -625,15 +670,17 @@ const TAU = Math.PI*2;
 const TAP_ROT = [-1.02, .12, .22];
 const TAP_POS = STONE_NODE.clone().add(new THREE.Vector3(-.06, .5, .2)).toArray();
 // lying back-up, long edge to the camera, close in: the card next to the camera plateau, like Ruune shows it
-const PROFILE_ROT = [Math.PI/2 + .24, .1, Math.PI/2], PROFILE_POS = [.46, -.1, .3];
+// close enough that the 1.3 mm difference reads: frame the stretch from the lenses to the card's top edge
+const PROFILE_S = 4.4, PROFILE_ROT = [Math.PI/2, 0, Math.PI/2], PROFILE_POS = [.91, .04 - PD/2*PROFILE_S, .3];
 const PHONE_KEYS = [
   [3.25, [1.4,-2.9,-.8], [.7,-1.4,.35], 1],
   [3.95, [0,0,0], [-.06,-.34,.05], 1],
   [4.0,  [0,0,0], [-.06,-.34,.05], 1],
   [4.15, [0,.02,0], [-.05,Math.PI-.45,-.04], 1],
   [4.43, [0,.02,0], [-.05,Math.PI-.38,-.03], 1],
-  [4.58, PROFILE_POS, PROFILE_ROT, 2.1],
-  [4.67, [.5,-.08,.3], [Math.PI/2 + .2, .06, Math.PI/2], 2.1],
+  [4.56, [.9,-.06,.3], [Math.PI/2 + .3, .12, Math.PI/2], 2.6],
+  [4.6, PROFILE_POS, PROFILE_ROT, PROFILE_S],
+  [4.68, PROFILE_POS, PROFILE_ROT, PROFILE_S],
   [4.79, [0,0,0], [-.05,-.3,.03], 1],
   [5.05, [0,0,0], [-.05,-.27,.03], 1],
   [5.6,  [-.55,.6,.3], [-.18,.3,.5], .6],
@@ -681,7 +728,9 @@ function updateStage(st, now){
   // phone
   phone.visible = st > 3.22 && st < 7.58;
   pose(PHONE_KEYS, st, phone);
-  if (!reduced){ phone.position.y += Math.sin(t*1.1)*.018; phone.rotation.z += Math.sin(t*.8)*.012; }
+  // idle float, except during the dead-on profile where it has to hold perfectly still
+  const still = smooth(4.57, 4.6, st)*(1 - smooth(4.68, 4.71, st));
+  if (!reduced){ phone.position.y += Math.sin(t*1.1)*.018*(1-still); phone.rotation.z += Math.sin(t*.8)*.012*(1-still); }
 
   // card: magnet pull (accelerating), snap, recording, then off it goes
   const flyK = clamp01((st-4.15)/(SNAP-4.15)), awayK = smooth(5.0, 5.32, st);
@@ -706,11 +755,12 @@ function updateStage(st, now){
     r.scale.setScalar(1 + k*.55); r.material.opacity = (1-k)*.55*on;
   });
   // side profile: 2.9 mm card next to the 4.2 mm camera bump
-  const dimK = smooth(4.55, 4.6, st)*(1 - smooth(4.68, 4.72, st));
+  const dimK = smooth(4.59, 4.61, st)*(1 - smooth(4.68, 4.7, st));
   dimsEl.style.opacity = dimK.toFixed(3);
   if (dimK > 0){
     const ex = CARD.w/2 + .002, cy = ATTACH.y;
-    dimension(dimCard, new THREE.Vector3(ex, cy, ph.backZ), new THREE.Vector3(ex, cy, ph.backZ - CARD.d), '2.9 mm', 'Recents');
+    const cyEnd = cy + CARD.h/2 - .05; // the card's end nearest the camera, so both stay in the close-up
+    dimension(dimCard, new THREE.Vector3(ex, cyEnd, ph.backZ), new THREE.Vector3(ex, cyEnd, ph.backZ - CARD.d), '2.9 mm', 'Recents');
     dimension(dimCam, new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.backZ), new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.lensTop), '4.2 mm', 'camera bump');
   }
 

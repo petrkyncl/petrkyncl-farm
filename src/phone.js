@@ -7,6 +7,8 @@
 // Scene unit = 10 cm, so 1 mm = .01.
 import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { slab, flat, faceBack } from './shapes.js';
 
 export const PW = .780, PH = 1.634, PD = .0875;
@@ -72,10 +74,10 @@ function appleLogoGeometry(height){
 
 export function createPhone(envTex){
   const phone = new THREE.Group();
-  const alu = new THREE.MeshPhysicalMaterial({color:0x2f3b52, metalness:.82, roughness:.44, envMap:envTex, envMapIntensity:.65});
-  const rail = new THREE.MeshPhysicalMaterial({color:0x37455f, metalness:.9, roughness:.28, envMap:envTex, envMapIntensity:1.05});
-  const shield = new THREE.MeshPhysicalMaterial({color:0x29344a, metalness:.05, roughness:.48, clearcoat:.55, clearcoatRoughness:.3, envMap:envTex, envMapIntensity:.8});
-  const logoM = new THREE.MeshPhysicalMaterial({color:0x56657f, metalness:1, roughness:.06, envMap:envTex, envMapIntensity:1.5, side:THREE.DoubleSide});
+  const alu = new THREE.MeshPhysicalMaterial({color:0x5a6178, metalness:.7, roughness:.5, envMap:envTex, envMapIntensity:.8});
+  const rail = new THREE.MeshPhysicalMaterial({color:0x6b7290, metalness:.95, roughness:.26, envMap:envTex, envMapIntensity:1});
+  const shield = new THREE.MeshPhysicalMaterial({color:0x4a5065, metalness:.1, roughness:.56, clearcoat:.4, clearcoatRoughness:.4, envMap:envTex, envMapIntensity:.7});
+  const logoM = new THREE.MeshPhysicalMaterial({color:0x3a4155, metalness:.9, roughness:.22, envMap:envTex, envMapIntensity:.7, side:THREE.DoubleSide});
   const glass = new THREE.MeshPhysicalMaterial({color:0x020203, roughness:.08, clearcoat:1, envMap:envTex});
 
   phone.add(new THREE.Mesh(slab(PW, PH, PD, .124, .03), [alu, rail]));
@@ -151,3 +153,34 @@ export function outlineGeometry(w, h, r, t){
   s.holes.push(hole);
   return new THREE.ShapeGeometry(s, 20);
 }
+
+// The real thing: a 3D-scanned-quality iPhone 17 Pro Max (glTF, metres, back facing +z).
+// Returns it scaled to scene units with the screen facing +z, plus its materials by name.
+export function loadIphone(url, envTex){
+  const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  return new Promise((ok, fail) => loader.load(url, gltf => {
+    const model = gltf.scene;
+    model.scale.setScalar(10); model.rotation.y = Math.PI;
+    const mats = {};
+    model.traverse(o => {
+      if (!o.isMesh) return;
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+        mats[m.name] = m;
+        if ('envMap' in m){ m.envMap = envTex; m.needsUpdate = true; }
+      });
+    });
+    ok({ model, mats });
+  }, undefined, fail));
+}
+
+// The model ships in Cosmic Orange; Deep Blue values matched against Apple's product photo.
+export const DEEP_BLUE = {
+  'Anodized aluminum': 0x4b5162, 'Plastic antena': 0x3b4050, 'Metal tint': 0x4c5266,
+  'Metal Screw': 0x535a6e, 'Frosted glass': 0x464b5c, 'Tinted glass': 0x3a3f50, 'LED': 0xdcd9d2
+};
+// a shade darker for the night room, where the stage light and the wall's glow already lift it
+export const DEEP_BLUE_NIGHT = {
+  'Anodized aluminum': 0x353a4a, 'Plastic antena': 0x2b2f3b, 'Metal tint': 0x373c4d,
+  'Metal Screw': 0x3d4352, 'Frosted glass': 0x323745, 'Tinted glass': 0x272b37, 'LED': 0xdcd9d2
+};
+export function paint(mats, scheme){ for (const [name, hex] of Object.entries(scheme)) if (mats[name]) mats[name].color.setHex(hex); }
