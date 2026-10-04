@@ -99,3 +99,5 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .road li.done{opacity:.55}
 .road li.on{opacity:1;transform:translateX(5px)}
 .road li.on b{color:var(--amber)}
+.credits{font-size:9px !important;opacity:.6}
+.credits a{color:inherit}
