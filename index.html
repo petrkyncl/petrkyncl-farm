@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kynčl Farm</title>
+<meta name="description" content="Petr Kynčl builds software that does people's work for them: MationX, Recents, Wear Close, Internát.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Martian+Mono:wght@200;300;400&family=Cormorant+Garamond:wght@300;400&display=swap">
+</head>
+<body>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+<div id="sel" aria-hidden="true"><div class="tag" id="tag"></div></div>
+<div id="cross" aria-hidden="true"></div>
+
+<ol class="nav" aria-label="Chapters">
+  <li><a href="#c0">00 Hello</a></li>
+  <li><a href="#c1">01 MationX</a></li>
+  <li><a href="#c2">02 Recents</a></li>
+  <li><a href="#c3">03 Wear Close</a></li>
+  <li><a href="#c4">04 Internát</a></li>
+  <li><a href="#c5">05 Contact</a></li>
+</ol>
+
+<main class="track">
+  <section class="ch" id="c0" style="--len:100"><div class="pin"><div class="copy">
+    <h1 class="sr">Petr Kynčl</h1>
+    <p class="big">I keep a wall of phones busy.</p>
+    <p>Every screen here is somebody's job, automated. Mostly at MationX in Prague, usually while everyone else is asleep.</p>
+  </div></div></section>
+
+  <section class="ch" id="c1" style="--len:100"><div class="pin"><div class="copy">
+    <h2 class="pname"><sup>01</sup>MationX</h2>
+    <p class="lead">Hundreds of phones. Millions of taps.</p>
+    <p>Every screen on this wall is a real Android phone running a flow built in MationX Studio. It taps, swipes and replies like a person, around the clock.</p>
+    <div class="stats"><div><b id="sPhones">512</b><span>Phones online</span></div><div><b id="sTaps">0</b><span>Taps today</span></div><div><b>0</b><span>Hands needed</span></div></div>
+    <a class="link" href="https://mationx.com" target="_blank" rel="noopener">mationx.com ↗</a>
+  </div></div></section>
+
+  <section class="ch" id="c2" style="--len:300"><div class="pin"><div class="copy">
+    <h2 class="pname"><sup>02</sup>Recents</h2>
+    <p class="lead">A memory for your phone.</p>
+    <p>A MagSafe puck records your calls, the app picks up your notifications, and AI turns all of it into transcripts you can talk to. Ask “what did the dentist tell me?” and it tells you.</p>
+  </div></div></section>
+
+  <section class="ch" id="c3" style="--len:260"><div class="pin"><div class="copy">
+    <h2 class="pname"><sup>03</sup>Wear Close</h2>
+    <p class="lead">A pair of bracelets. One tap says I miss you.</p>
+    <p>A pair of bracelets with an NFC chip sealed inside and nothing to charge. Bring your phone to yours and theirs lights up: “Sarah is thinking about you.” The same tap can carry a photo or a mood into your shared memories. iOS and Android.</p>
+  </div></div></section>
+
+  <section class="ch" id="c4" style="--len:100"><div class="pin"><div class="copy">
+    <h2 class="pname"><sup>04</sup>Internát</h2>
+    <p class="lead">A dormitory on autopilot.</p>
+    <p>RFID badges, passes signed on a phone, a text to parents when someone is late. The night shift runs itself.</p>
+    <a class="link" href="https://internat.cz" target="_blank" rel="noopener">internat.cz ↗</a>
+  </div></div></section>
+
+  <section class="ch" id="c5" style="--len:100"><div class="pin"><div class="copy">
+    <h2 class="pname"><sup>05</sup>Still human</h2>
+    <p class="lead">I showed up with a fever and left with second place.</p>
+    <p>Cursor Hackathon, Prague. Eighty people, eighty projects, five hours to build yours and pitch it in English. I was seventeen. That's me on the right.</p>
+    <p>If you're building something that should keep running without you, I'd like to hear about it.</p>
+    <div class="contact">
+      <div class="mail"><span id="mailtxt">petr@mationx.com</span><button id="copy" type="button">Copy</button></div>
+      <a class="link" href="https://mationx.com" target="_blank" rel="noopener">mationx.com ↗</a>
+    </div>
+    <p class="foot">Office: Arbesovo náměstí 70/4, Prague 5. Also built: SMS Manager, Market Scanner, Menu Bot, Smart Access Control.</p>
+  </div></div></section>
+</main>
+
+<div class="scroll" id="scroll" aria-hidden="true">Scroll<i></i></div>
+<div class="me" id="me" aria-hidden="true">Me<i></i></div>
+
+<div class="hud">
+  <button id="clock" type="button" title="Preview the room at another time of day"><i></i>Prague<b id="hTime">--:--</b><em id="hShift">Night shift</em></button>
+  <span aria-hidden="true">Wall<b id="hDev">0</b></span>
+  <span aria-hidden="true">Jobs running<b id="hJobs">0</b></span>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
