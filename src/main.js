@@ -389,7 +389,7 @@ const ui = UI.getContext('2d');
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
 ph.display.material.map = uiTex; ph.display.material.needsUpdate = true;
 const rc = createCard(envTex), card = rc.card; phone.add(card);
-const ATTACH = new THREE.Vector3(0, .02, ph.backZ - CARD.d/2 - .0006);
+const ATTACH = new THREE.Vector3(ph.magsafe[0], ph.magsafe[1], ph.backZ - CARD.d/2 - .0006);
 const soundRings = [0,1,2].map(() => {
   const r = faceBack(new THREE.Mesh(outlineGeometry(CARD.w, CARD.h, CARD.r, .005), new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.35,.55), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false})));
   r.position.set(ATTACH.x, ATTACH.y, ph.backZ - .0015); phone.add(r); return r;
@@ -603,15 +603,15 @@ const TAU = Math.PI*2;
 const TAP_ROT = [-1.02, .12, .22];
 const TAP_POS = STONE_NODE.clone().add(new THREE.Vector3(-.06, .5, .2)).toArray();
 // lying back-up, long edge to the camera, close in: the card next to the camera plateau, like Ruune shows it
-const PROFILE_ROT = [Math.PI/2 + .24, .1, Math.PI/2], PROFILE_POS = [.78, -.1, .3];
+const PROFILE_ROT = [Math.PI/2 + .24, .1, Math.PI/2], PROFILE_POS = [.46, -.1, .3];
 const PHONE_KEYS = [
   [3.25, [1.4,-2.9,-.8], [.7,-1.4,.35], 1],
   [3.95, [0,0,0], [-.06,-.34,.05], 1],
   [4.0,  [0,0,0], [-.06,-.34,.05], 1],
   [4.15, [0,.02,0], [-.05,Math.PI-.45,-.04], 1],
   [4.43, [0,.02,0], [-.05,Math.PI-.38,-.03], 1],
-  [4.58, PROFILE_POS, PROFILE_ROT, 2.5],
-  [4.67, [.82,-.08,.3], [Math.PI/2 + .2, .06, Math.PI/2], 2.5],
+  [4.58, PROFILE_POS, PROFILE_ROT, 2.1],
+  [4.67, [.5,-.08,.3], [Math.PI/2 + .2, .06, Math.PI/2], 2.1],
   [4.79, [0,0,0], [-.05,-.3,.03], 1],
   [5.05, [0,0,0], [-.05,-.27,.03], 1],
   [5.6,  [-.55,.6,.3], [-.18,.3,.5], .6],
@@ -689,7 +689,7 @@ function updateStage(st, now){
   if (dimK > 0){
     const ex = CARD.w/2 + .002, cy = ATTACH.y;
     dimension(dimCard, new THREE.Vector3(ex, cy, ph.backZ), new THREE.Vector3(ex, cy, ph.backZ - CARD.d), '2.9 mm', 'Recents');
-    dimension(dimCam, new THREE.Vector3(.332, ph.yP - .097, ph.backZ), new THREE.Vector3(.332, ph.yP - .097, ph.lensTop), '4.2 mm', 'camera bump');
+    dimension(dimCam, new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.backZ), new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.lensTop), '4.2 mm', 'camera bump');
   }
 
   // screen content
