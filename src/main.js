@@ -815,7 +815,7 @@ function placeStage(){
 }
 
 // ---------- intro desk (rides with the camera, like the stage) ----------
-const desk = createDesk({envTex, nameTex, photo:null, stacked:isStacked});
+const desk = createDesk({envTex, nameTex, stacked:isStacked});
 camera.add(desk.root);
 const flashEl = document.getElementById('flash');
 
@@ -854,6 +854,7 @@ function applyLight(h){
   rim.intensity = lerp(1.3, .8, day);
   pKey.color.copy(KEY_N).lerp(KEY_D, Math.max(day,.4)).lerp(KEY_G, gold*.6);
   uniforms.uGain.value = lerp(1.06, .9, day);
+  desk.setDaylight(day, gold);
   bloom.strength = lerp(.52, .34, day) + Math.max(0, 1 - (performance.now()-fx.snapT)/600)*.5;
   const hex = '#' + room.getHexString();
   if (hex !== roomCss){ roomCss = hex; document.documentElement.style.setProperty('--room', hex); }
@@ -1009,7 +1010,8 @@ function frame(now){
 
   // hover via raycast (off while the stage owns the frame)
   let h = -1;
-  if (ndc.x < 2 && (fine || now < tapUntil) && U.uDim.value < .3){
+  // no hover while the desk owns the frame (a hidden wall still raycasts) or while the stage does
+  if (ndc.x < 2 && (fine || now < tapUntil) && U.uDim.value < .3 && wall.visible){
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObject(screens, false)[0];
     if (hit && hit.instanceId !== undefined) h = hit.instanceId;
@@ -1074,9 +1076,6 @@ function frame(now){
 const img = new Image();
 img.onload = () => paintFace(img);
 img.src = GROUP_IMG;
-const me = new Image();
-me.onload = () => desk.setPhoto(me);
-me.src = '/petr.png';
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"'].map(f => document.fonts.load(f))).catch(()=>{})
   : Promise.resolve();
