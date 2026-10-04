@@ -231,7 +231,7 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
     // the MacBook opens, wakes up, keyboard backlight glows
     const open = easeIO(smooth(.24, .52, st));
     hinge.rotation.x = OPEN*open;
-    if (macPivot) macPivot.rotation.x = LID_SHUT*(1 - open);
+    if (macPivot){ macPivot.rotation.x = LID_SHUT*(1 - open); if (hingeCover) hingeCover.visible = macPivot.rotation.x < 1; }
     const pw = smooth(.46, .56, st);
     mbUniforms.uPow.value = pw*(st < .56 && Math.random() > .7 ? .4 : 1);
     mbUniforms.uTime.value = now/1000;
@@ -251,17 +251,18 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
   }
 
   // ---------- the real MacBook Pro 14" (M5, Space Black) replaces the hand-built one once it loads ----------
-  // The model ships with the lid open at ~112°. Its lid parts get re-parented under a pivot on the hinge line
-  // (model space y 0, z -0.108 m) so the lid can close and open; its screen gets the miniature phone wall.
+  // The model ships with the lid open at ~110°. Its lid parts get re-parented under a pivot on the hinge axis so the
+  // lid can close and open; its screen gets the miniature phone wall. Angle and pivot are solved in /mac-lab.html?solve:
+  // the angle that lays the lid's flat shell level, and the pivot that closes it flush with the base's front edge.
   const LID_PARTS = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC',
     'xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl','WyuoVWKMOcOlXJM'];
-  const LID_SHUT = 1.925, Y = new THREE.Vector3(0, 1, 0); // found by eye in /mac-lab.html: flat on the deck, no intersection
-  let macPivot = null;
+  const LID_SHUT = 1.92008, PIVOT = [-.00078, -.10748], Y = new THREE.Vector3(0, 1, 0);
+  let macPivot = null, hingeCover = null;
   const mac = new THREE.Group(); mac.position.set(.5, .09, 1.3); mac.rotation.y = -.06;
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
   loader.loadAsync('/models/macbook-pro-14-m5.glb').then(gltf => {
     const model = gltf.scene; model.scale.setScalar(10); mac.add(model);
-    const pivot = new THREE.Group(); pivot.position.set(0, 0, -.108); model.add(pivot);
+    const pivot = new THREE.Group(); pivot.position.set(0, PIVOT[0], PIVOT[1]); model.add(pivot);
     scene.add(mac); mac.updateMatrixWorld(true);
     const lid = []; model.traverse(o => { if (o.isMesh && LID_PARTS.includes(o.name)) lid.push(o); });
     lid.forEach(o => pivot.attach(o));
@@ -276,6 +277,7 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
     const screen = lid.find(o => o.name === 'tfTbkkzhxqpKRgC');
     if (screen){ screen.material = mbScreen.material; mbUniforms.uFlip.value.set(0, 1); } // the model's screen UVs run bottom-up
     MB.visible = false; macPivot = pivot;
+    hingeCover = model.getObjectByName('UEFeUEhkJPdlgXF'); // base-side hinge cover: hidden by the lid when open, pokes out behind when shut
     // dive target: centre and facing of the open screen, in desk space
     SCREEN_C.set(0, .105, -.1515).multiplyScalar(10).applyAxisAngle(Y, mac.rotation.y).add(mac.position);
     SCREEN_N.set(0, .376, .926).applyAxisAngle(Y, mac.rotation.y);
