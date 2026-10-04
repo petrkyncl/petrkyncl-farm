@@ -22,12 +22,15 @@ if (view === 'card'){ const c = createCard(envTex); c.card.position.set(0, ph.ma
 const aspect = innerWidth/innerHeight, h = PH/(963/1024);
 const cam = new THREE.OrthographicCamera(-h*aspect/2, h*aspect/2, h/2, -h/2, .01, 20);
 if (view === 'front'){ cam.position.set(0, 0, 5); }
+else if (view === 'island'){ const z = .14; cam.left = -z*aspect; cam.right = z*aspect; cam.top = .737 + z; cam.bottom = .737 - z; cam.updateProjectionMatrix(); cam.position.set(0, 0, 5); }
 else if (view === 'side'){ cam.position.set(5, 0, 0); }
 else { cam.position.set(0, 0, -5); }
 cam.lookAt(0, 0, 0);
 if (useGlb){
   const { model, mats } = await loadIphone('/models/iphone-17-pro-max.glb', envTex);
   window.mats = mats; paint(mats, DEEP_BLUE); scene.add(model);
+  // ?red=Mat%20Name,Other  paints materials red to identify parts
+  (new URLSearchParams(location.search).get('red') || '').split(',').filter(Boolean).forEach(n => { const m = mats[n]; if (m){ m.color.setHex(0xff0000); if (m.emissive) m.emissive.setHex(0x660000); m.map = null; m.needsUpdate = true; } });
   console.log(Object.keys(mats).join(', '));
 }
 renderer.render(scene, cam);

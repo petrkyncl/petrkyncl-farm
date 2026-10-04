@@ -286,39 +286,204 @@ const screenMat = new THREE.ShaderMaterial({
       return c;
     }
 
-    // WhatsApp, dark mode: header with the contact, green/grey bubbles drifting up, input bar with the mic button
-    vec3 whatsapp(vec2 q, float t, float s){
-      vec3 col = vec3(.043,.078,.102);
-      vec2 dg = fract(q*9.0) - .5;
-      float dn = hash(floor(q.x*9.0) + floor(q.y*9.0)*17.0 + s*3.0);
-      col += vec3(.018,.026,.03)*fillD(abs(length(dg)-.22)-.018, .03)*step(.55, dn);
-      float hy0 = ASP-.34;
-      float off = fract(t*.16+s)*.4;
-      for (int i=0;i<7;i++){
-        float fi = float(i);
-        float y = .3 + fi*.4 - off;
-        float mine = mod(fi + floor(s*2.0), 2.0);
-        float w = .2 + .2*hash(fi + s*13.0);
-        float h = .062 + .05*step(.5, hash(fi*3.1+s));
-        vec2 cp = vec2(mine > .5 ? .93-w : .07+w, y);
-        float vis = smoothstep(.2, .26, y-h)*(1.0-smoothstep(hy0-.06, hy0-.01, y+h));
-        vec3 bc = mine > .5 ? vec3(0.0,.361,.294) : vec3(.125,.173,.2);
-        col = mix(col, bc, fillD(sdBox(q-cp, vec2(w, h), .045), .008)*vis);
-        float tl = fillD(sdBox(q-cp-vec2(-w*.1, h*.32), vec2(w*.76, .011), .006), .006)
-                 + fillD(sdBox(q-cp-vec2(-w*.3, -h*.22), vec2(w*.52, .011), .006), .006)*step(.09, h);
-        col = mix(col, vec3(.8,.85,.83), clamp(tl,0.0,1.0)*vis);
-        col = mix(col, vec3(.33,.72,.93), fillD(sdBox(q-cp-vec2(w*.74, -h*.66), vec2(.028,.007), .004), .006)*vis*mine);
-      }
-      col = mix(col, vec3(.122,.173,.204), step(hy0, q.y));
-      col = mix(col, vec3(.42,.47,.5), fillD(length(q-vec2(.16, hy0+.1))-.058, .01));
-      col = mix(col, vec3(.86,.89,.9), fillD(sdBox(q-vec2(.42, hy0+.12), vec2(.15,.018), .01), .008));
-      col = mix(col, vec3(.45,.52,.55), fillD(sdBox(q-vec2(.36, hy0+.068), vec2(.09,.011), .006), .008));
-      col = mix(col, vec3(.043,.078,.102), step(q.y, .2));
-      col = mix(col, vec3(.165,.224,.259), fillD(sdBox(q-vec2(.42,.11), vec2(.35,.055), .055), .008));
-      col = mix(col, vec3(0.0,.659,.518), fillD(length(q-vec2(.88,.11))-.058, .008));
-      col = mix(col, vec3(.92), fillD(sdBox(q-vec2(.84,ASP-.07),vec2(.07,.018),.008),.01)*.8);
-      col = mix(col, vec3(.92), fillD(sdBox(q-vec2(.16,ASP-.07),vec2(.05,.012),.006),.01)*.8);
+    // ===== real apps for the automation chapter: few, but each one actually doing something =====
+    float bar(vec2 q, float x0, float y, float w, float h){ return fillD(sdBox(q - vec2(x0 + w*.5, y), vec2(w*.5, h), h), .006); }
+    float ring(vec2 q, vec2 c, float r, float th){ return fillD(abs(length(q - c) - r) - th, .006); }
+    float dot1(vec2 q, vec2 c, float r){ return fillD(length(q - c) - r, .006); }
+    vec3 statusBar(vec2 q, vec3 col, vec3 fg){
+      col = mix(col, fg, bar(q, .08, ASP-.07, .1, .014));
+      col = mix(col, fg, bar(q, .78, ASP-.07, .14, .014));
       return col;
+    }
+
+    // Gboard, dark: four rows of keys; while typing the key under the "finger" lights up
+    vec3 keyboard(vec2 q, float top, float keyId, float press){
+      vec3 col = vec3(.12,.125,.135);
+      float y0 = .075, rowH = (top - y0)/4.0;
+      if (q.y < y0 || q.y > top) return col;
+      float r = floor((q.y - y0)/rowH), fy = (q.y - y0)/rowH - r;
+      float x0 = .015, x1 = .985, n = 10.0, base = 0.0;
+      if (r > 2.5){ n = 10.0; base = 0.0; }
+      else if (r > 1.5){ n = 9.0; x0 = .065; x1 = .935; base = 10.0; }
+      else if (r > .5){ n = 9.0; base = 19.0; }
+      float kw = (x1 - x0)/n, ci = floor((q.x - x0)/kw), fx = (q.x - x0)/kw - ci;
+      vec3 key = vec3(.235,.25,.27);
+      if (r < .5){
+        // bottom row: ?123  ,  space  .  enter
+        float xs = q.x;
+        float k0 = step(.015, xs)*step(xs, .16), k1 = step(.17, xs)*step(xs, .27), k2 = step(.28, xs)*step(xs, .72), k3 = step(.73, xs)*step(xs, .83), k4 = step(.84, xs)*step(xs, .985);
+        float inside = (k0 + k1 + k2 + k3 + k4)*step(.14, fy)*step(fy, .86);
+        vec3 kc = k4 > .5 ? vec3(.54,.7,.98)*.75 : (k0 + k1 + k3 > .5 ? vec3(.18,.19,.2) : key);
+        col = mix(col, kc, inside);
+        return col;
+      }
+      if (ci < 0.0 || ci > n - 1.0) return col;
+      float inside = step(.07, fx)*step(fx, .93)*step(.14, fy)*step(fy, .86);
+      bool special = r > .5 && r < 1.5 && (ci < .5 || ci > n - 1.5);
+      vec3 kc = special ? vec3(.18,.19,.2) : key;
+      if (!special && abs(base + ci - keyId) < .5) kc = mix(kc, vec3(.62,.66,.72), press);
+      col = mix(col, kc, inside);
+      // a hint of the legend on each key
+      col = mix(col, vec3(.8,.82,.85), inside*fillD(length(vec2((fx - .5)*kw, (fy - .5)*rowH)) - .007, .004)*.7);
+      return col;
+    }
+
+    // WhatsApp (tg = 0) / Telegram (tg = 1): type a message, send it, the other side types back, a reply lands
+    vec3 chatApp(vec2 q, float t, float s, float tg){
+      vec3 BG = mix(vec3(.043,.078,.102), vec3(.055,.09,.13), tg), HEAD = mix(vec3(.122,.173,.204), vec3(.09,.13,.17), tg);
+      vec3 OUT = mix(vec3(0.0,.361,.294), vec3(.17,.32,.48), tg), IN = mix(vec3(.125,.173,.2), vec3(.1,.15,.2), tg);
+      vec3 ACC = mix(vec3(0.0,.659,.518), vec3(.33,.62,.93), tg), TXT = vec3(.86,.89,.9);
+      float L = 7.5, tt = t + s*L*3.0 + L*6.0, cyc = floor(tt/L), k = tt - cyc*L; // +6 loops: every chat already has a history
+      float typed = clamp((k - .4)/3.0, 0.0, 1.0)*(1.0 - step(3.45, k));
+      float sent = smoothstep(3.45, 3.8, k), reply = smoothstep(5.6, 5.95, k);
+      float F = cyc*2.0 + sent + reply;
+      float inTop = .735, kbTop = .63, headY = ASP - .30;
+      vec3 col = BG;
+      if (tg < .5){
+        vec2 dg = fract(q*9.0) - .5; float dn = hash(floor(q.x*9.0) + floor(q.y*9.0)*17.0 + s*3.0);
+        col += vec3(.018,.026,.03)*fillD(abs(length(dg)-.22)-.018, .03)*step(.55, dn);
+      } else col += vec3(.0,.02,.04)*q.y;
+      // messages: absolute index m, even = mine; they rise from the input bar and push the older ones up
+      for (int j=0; j<7; j++){
+        float m = ceil(F) - 1.0 - float(j);
+        if (m < 0.0) break;
+        float row = F - 1.0 - m;
+        float mine = 1.0 - mod(m, 2.0);
+        float two = step(.55, hash(m*3.7 + s*11.0));
+        float h = mix(.036, .058, two), w = .17 + .2*hash(m*1.3 + s*7.0);
+        vec2 cp = vec2(mine > .5 ? .95 - w : .05 + w, inTop + .045 + row*.14 + h);
+        float vis = step(inTop + .012, q.y)*step(q.y, headY);
+        vec3 bc = mine > .5 ? OUT : IN;
+        col = mix(col, bc, fillD(sdBox(q - cp, vec2(w, h), .03), .006)*vis);
+        float tl = bar(q, cp.x - w + .035, cp.y + h - .024, w*1.5, .009) + two*bar(q, cp.x - w + .035, cp.y + h - .054, w*1.1, .009);
+        col = mix(col, TXT*.9, clamp(tl, 0.0, 1.0)*vis);
+        float readNow = step(m + 1.5, F) + step(abs(m - cyc*2.0), .1)*step(4.2, k);
+        vec3 tick = mix(vec3(.55,.6,.62), mix(vec3(.33,.72,.93), vec3(.45,.85,.6), tg), clamp(readNow, 0.0, 1.0));
+        col = mix(col, tick, bar(q, cp.x + w - .07, cp.y - h + .016, .04, .006)*vis*mine);
+      }
+      // header with the contact; "typing…" while the other side writes back
+      col = mix(col, HEAD, step(headY, q.y));
+      col = mix(col, vec3(.42,.47,.5), dot1(q, vec2(.15, headY + .12), .05));
+      col = mix(col, TXT, bar(q, .23, headY + .14, .26, .016));
+      float typingBack = step(4.4, k)*step(k, 5.6);
+      col = mix(col, mix(vec3(.45,.52,.55), ACC, typingBack), bar(q, .23, headY + .09, typingBack > .5 ? .1 : .14, .01));
+      for (int d=0; d<3; d++){ float fd = float(d); col = mix(col, ACC, dot1(q, vec2(.37 + fd*.025, headY + .09), .007)*typingBack*step(.5, fract(t*2.5 - fd*.2))); }
+      col = mix(col, vec3(.75,.8,.82), bar(q, .74, headY + .12, .04, .016) + bar(q, .84, headY + .12, .04, .016));
+      // input bar: the message grows character by character, caret blinking; mic turns into send, send flashes
+      col = mix(col, BG, step(kbTop, q.y)*step(q.y, inTop + .012));
+      col = mix(col, mix(vec3(.165,.224,.259), vec3(.12,.17,.22), tg), fillD(sdBox(q - vec2(.41, .683), vec2(.37, .042), .042), .006));
+      float tw = typed*(.38 + .16*hash(cyc + s*5.0));
+      col = mix(col, TXT, bar(q, .1, .683, tw, .011)*step(.001, typed));
+      col = mix(col, ACC, step(.5, fract(t*1.6))*bar(q, .1 + tw + .006, .683, .004, .02)*step(k, 3.45));
+      float flash = smoothstep(3.3, 3.45, k)*(1.0 - smoothstep(3.45, 3.75, k));
+      col = mix(col, ACC*(1.0 + flash*.6), dot1(q, vec2(.9, .683), .045 + flash*.008));
+      float sendIcon = step(.001, typed)*step(k, 3.5);
+      col = mix(col, vec3(.95), mix(bar(q, .892, .683, .016, .016), fillD(sdBox(q - vec2(.902, .683), vec2(.016, .009), .004), .004), sendIcon));
+      // keyboard with the pressed key
+      float pr = step(.001, typed)*step(fract(k*7.0), .55);
+      float kid = floor(hash(floor(k*7.0) + cyc*13.0 + s*31.0)*27.99);
+      if (q.y < kbTop) col = keyboard(q, kbTop, kid, pr);
+      col = statusBar(q, col, vec3(.92));
+      return col;
+    }
+
+    // a "photo": two-tone sky, a sun, a hill line; seeded so every post and video looks different
+    vec3 photo(vec2 uv, float sd){
+      vec3 c1 = vec3(.98,.62,.36), c2 = vec3(.42,.24,.52);
+      float pick = hash(sd*7.1);
+      if (pick > .75){ c1 = vec3(.4,.78,.85); c2 = vec3(.1,.25,.5); }
+      else if (pick > .5){ c1 = vec3(.62,.82,.5); c2 = vec3(.12,.3,.22); }
+      else if (pick > .25){ c1 = vec3(.95,.5,.62); c2 = vec3(.12,.12,.32); }
+      vec3 col = mix(c2, c1, smoothstep(0.0, 1.0, uv.y));
+      vec2 sun = vec2(.25 + .5*hash(sd*3.3), .62 + .2*hash(sd*5.9));
+      col = mix(col, vec3(1.0,.95,.82), fillD(length(uv - sun) - .09, .02)*.85);
+      float hill = .3 + .08*sin(uv.x*6.0 + sd*20.0) + .04*sin(uv.x*13.0 + sd*7.0);
+      col = mix(col, c2*.55, step(uv.y, hill));
+      return col*.82;
+    }
+
+    // Instagram, dark: scroll the feed post by post, double-tap the photo, the heart pops and the like turns red
+    vec3 instaApp(vec2 q, float t, float s){
+      float L = 4.6, P = 1.42, tt = t + s*L*4.0, n = floor(tt/L), k = tt - n*L;
+      float topY = ASP - .2, navY = .12;
+      float cy = topY - q.y + (n + smoothstep(3.5, 4.4, k))*P;
+      float pi = floor(cy/P), ly = cy - pi*P;
+      vec3 col = vec3(0.0);
+      // post header: avatar with the gradient story ring, username
+      vec2 hp = vec2(q.x, -ly);
+      col = mix(col, mix(vec3(.98,.75,.25), vec3(.85,.2,.55), q.x*6.0), ring(hp, vec2(.08, -.06), .042, .006));
+      col = mix(col, vec3(.45), dot1(hp, vec2(.08, -.06), .033));
+      col = mix(col, vec3(.92), bar(hp, .15, -.06, .2 + .1*hash(pi + s), .011));
+      // the photo
+      if (ly > .12 && ly < 1.12) col = photo(vec2(q.x, 1.0 - (ly - .12)), pi + s*13.0);
+      // actions: heart, comment, share, bookmark
+      vec2 ap = vec2(q.x, -(ly - 1.17));
+      float liked = (abs(pi - n) < .5) ? step(1.15, k) : step(.35, hash(pi*2.3 + s));
+      float hOut = clamp(heart(ap - vec2(.07, 0.0), .042) - heart(ap - vec2(.07, .004), .03), 0.0, 1.0);
+      col = mix(col, vec3(.92), hOut*(1.0 - liked));
+      col = mix(col, vec3(1.0,.19,.3), heart(ap - vec2(.07, 0.0), .042)*liked);
+      col = mix(col, vec3(.92), ring(ap, vec2(.17, 0.0), .026, .005));
+      col = mix(col, vec3(.92), fillD(sdSeg(ap, vec2(.25, -.02), vec2(.3, .02)) - .005, .005) + fillD(sdSeg(ap, vec2(.25, -.02), vec2(.285, .015)) - .004, .005)*0.0);
+      col = mix(col, vec3(.92), fillD(abs(sdBox(ap - vec2(.93, 0.0), vec2(.018, .028), .003)) - .004, .005));
+      // likes count and caption
+      col = mix(col, vec3(.92), bar(vec2(q.x, -ly), .045, -1.25, .22, .01));
+      col = mix(col, vec3(.7), bar(vec2(q.x, -ly), .045, -1.3, .6*hash(pi*1.7 + s) + .25, .009));
+      // the double-tap heart over the current photo
+      float pop = smoothstep(1.0, 1.25, k)*(1.0 - smoothstep(1.55, 1.85, k));
+      if (abs(pi - n) < .5 && ly > .12 && ly < 1.12){ float sc = .14*(.6 + .4*smoothstep(1.0, 1.2, k)); col = mix(col, vec3(1.0), heart(vec2(q.x, -ly) - vec2(.5, -.62), sc)*pop); }
+      // top bar and bottom nav
+      col = mix(col, vec3(0.0), step(topY, q.y));
+      col = mix(col, vec3(.95), bar(q, .06, topY + .07, .24, .02));
+      col = mix(col, vec3(.95), clamp(heart(q - vec2(.8, topY + .07), .03) - heart(q - vec2(.8, topY + .073), .02), 0.0, 1.0));
+      col = mix(col, vec3(0.0), step(q.y, navY));
+      for (int i=0; i<5; i++){ float fi = float(i); col = mix(col, vec3(.9), fillD(abs(sdBox(q - vec2(.1 + fi*.2, .06), vec2(.025, .025), .008)) - .004, .005)); }
+      return statusBar(q, col, vec3(.92));
+    }
+
+    // TikTok: a video plays, the like goes red with a burst, then a swipe up to the next one
+    vec3 tiktokApp(vec2 q, float t, float s){
+      float L = 4.2, tt = t + s*L*5.0, n = floor(tt/L), k = tt - n*L;
+      float sw = smoothstep(3.55, 4.2, k);
+      float vy = q.y + sw*ASP, vi = n + floor(vy/ASP), y = mod(vy, ASP);
+      vec2 uv = vec2(q.x, y/ASP);
+      // the video: a slow push-in on a seeded photo, a person swaying in front of it
+      vec2 zuv = (uv - .5)*(1.0 - .06*fract(t*.2)) + .5;
+      vec3 col = photo(zuv, vi*1.9 + s*17.0);
+      float sway = .03*sin(t*2.4 + vi);
+      vec2 pc = vec2(.5 + sway, .5);
+      float person = fillD(length((uv - pc - vec2(0.0, .08))*vec2(1.0, 2.13)) - .1, .01) + fillD(sdBox((uv - pc + vec2(0.0, .12))*vec2(1.0, 2.13), vec2(.17, .3), .12), .01);
+      col = mix(col, col*.25 + vec3(.05), clamp(person, 0.0, 1.0)*.85);
+      col *= mix(.45, 1.0, smoothstep(.0, .35, uv.y));
+      // overlay (doesn't move with the swipe)
+      col = mix(col, vec3(.95), bar(q, .3, ASP - .14, .14, .011) + bar(q, .52, ASP - .14, .18, .013));
+      col = mix(col, vec3(.95), bar(q, .52, ASP - .165, .18, .004));
+      float liked = step(1.6, k);
+      col = mix(col, vec3(.6), dot1(q, vec2(.9, 1.0), .05)); col = mix(col, vec3(1.0,.17,.33), dot1(q, vec2(.9, .95), .014));
+      col = mix(col, mix(vec3(.95), vec3(1.0,.17,.33), liked), heart(q - vec2(.9, .82), .05));
+      float burst = smoothstep(1.6, 1.75, k)*(1.0 - smoothstep(1.75, 2.1, k));
+      col = mix(col, vec3(1.0,.4,.5), ring(q, vec2(.9, .82), .04 + burst*.05, .004)*burst);
+      col = mix(col, vec3(.95), dot1(q, vec2(.9, .67), .03)); col = mix(col, vec3(.95), dot1(q, vec2(.9, .53), .03)); col = mix(col, vec3(.95), dot1(q, vec2(.9, .39), .03));
+      float spin = t*1.5; vec2 dq = q - vec2(.9, .22);
+      col = mix(col, vec3(.15), dot1(q, vec2(.9, .22), .045)); col = mix(col, vec3(.6), dot1(q, vec2(.9, .22), .016)*(.6 + .4*sin(atan(dq.y, dq.x)*4.0 + spin)));
+      col = mix(col, vec3(.97), bar(q, .05, .33, .22, .013));
+      col = mix(col, vec3(.85), bar(q, .05, .28, .55, .009) + bar(q, .05, .245, .38, .009));
+      col = mix(col, vec3(.85), bar(q, .1, .19, .35, .008));
+      col = mix(col, vec3(1.0,.17,.33), bar(q, 0.0, .105, ASP*0.0 + .95*fract(k/L), .003));
+      col = mix(col, vec3(0.0), step(q.y, .1));
+      for (int i=0; i<5; i++){ float fi = float(i); if (i == 2) continue; col = mix(col, vec3(.85), dot1(q, vec2(.1 + fi*.2, .05), .018)); }
+      col = mix(col, vec3(.25,.95,.95), fillD(sdBox(q - vec2(.49, .05), vec2(.05, .028), .012), .004));
+      col = mix(col, vec3(1.0,.17,.33), fillD(sdBox(q - vec2(.51, .05), vec2(.05, .028), .012), .004));
+      col = mix(col, vec3(.97), fillD(sdBox(q - vec2(.5, .05), vec2(.045, .028), .012), .004));
+      return statusBar(q, col, vec3(.95));
+    }
+
+    // what a phone on the farm is doing right now: mostly chats, some feeds
+    vec3 automation(vec2 q, float t, float s){
+      float pick = hash(s*91.7);
+      if (pick < .38) return chatApp(q, t, s, 0.0);
+      if (pick < .55) return chatApp(q, t, s, 1.0);
+      if (pick < .8) return instaApp(q, t, s);
+      return tiktokApp(q, t, s);
     }
 
     void main(){
@@ -329,8 +494,9 @@ const screenMat = new THREE.ShaderMaterial({
       vec2 q = vec2(vUv.x, vUv.y*ASP);
       float t = uTime + vSeed*30.0;
       float typ = vDelay < uSweep ? uTo : uFrom;
-      if (typ > 8.5) typ = vType;
-      float a = clamp(app(typ, q, t, vSeed), 0.0, 1.2);
+      if (typ > 8.5) typ = 7.0; // "mixed" means the automation mix
+      bool real = typ > 6.5 || (typ > 2.5 && typ < 3.5);
+      float a = real ? 0.0 : clamp(app(typ, q, t, vSeed), 0.0, 1.2);
 
       vec2 wuv = (vCell + vUv) / uGrid;
       vec3 fc = texture2D(uFace, wuv).rgb;
@@ -348,7 +514,7 @@ const screenMat = new THREE.ShaderMaterial({
 
       vec3 bg = vec3(.028,.036,.058);
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
-      vec3 ac = (typ > 2.5 && typ < 3.5) ? whatsapp(q, t, vSeed) : bg + (ink-bg)*a;
+      vec3 ac = typ > 6.5 ? automation(q, t, vSeed) : ((typ > 2.5 && typ < 3.5) ? chatApp(q, t, vSeed, 0.0) : bg + (ink-bg)*a);
       vec3 col = mix(ac*mix(1.0,.3,uWall), bg + (ink-bg)*img*1.05, wm);
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
       col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
@@ -409,7 +575,10 @@ const pKey = new THREE.DirectionalLight(0xffffff, .6); pKey.position.set(-3,1.2,
 
 // ---------- iPhone 17 Pro Max + the Recents card (see phone.js) ----------
 const ph = createPhone(envTex), phone = ph.phone; stage.add(phone);
-const UW = 600, UH = Math.round(UW*DISPLAY.h/DISPLAY.w);
+// the model's display is 0.8924 × 1.9378 (its own units): the UI canvas keeps that aspect so nothing stretches
+const UW = 600, UH = Math.round(UW*1.9378/0.8924);
+// the model's Dynamic Island, measured off its geometry, as fractions of the display (seen from the front)
+const ISLAND = { cx:.5096, cy:.0345, w:.2689, h:.0379 };
 const UI = document.createElement('canvas'); UI.width = UW; UI.height = UH;
 const ui = UI.getContext('2d');
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
@@ -429,6 +598,11 @@ loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
   // the front cover glass is near-mirror; tone its highlight down so the bloom doesn't flare
   if (mats['Glass']){ mats['Glass'].roughness = .16; mats['Glass'].envMapIntensity = .35; }
   if (oled){ oled.roughness = .42; oled.envMapIntensity = .15; }
+  // the island is one black pill: its cut-out walls and the front sensors behind it must not catch light
+  if (mats['OLED off']){ mats['OLED off'].color.setHex(0x000000); mats['OLED off'].roughness = .5; mats['OLED off'].envMapIntensity = 0; }
+  if (mats['Camera filter']){ mats['Camera filter'].color.setHex(0x030305); mats['Camera filter'].envMapIntensity = .15; }
+  // the display frame lines both island cut-outs and the bezel; glossy it outlines them in grey, so it goes matte black
+  if (mats['Display Frame']){ mats['Display Frame'].color.setHex(0x000000); mats['Display Frame'].roughness = .9; mats['Display Frame'].envMapIntensity = 0; }
   phone.add(model);
 }).catch(e => console.warn('iPhone model failed, keeping the procedural one', e));
 const ATTACH = new THREE.Vector3(ph.magsafe[0], ph.magsafe[1], ph.backZ - CARD.d/2 - .0006);
@@ -486,14 +660,15 @@ function wrap(text, maxW){ const words = text.split(' '), lines = []; let cur = 
 function heart2d(g,cx,cy,s){ g.beginPath(); g.moveTo(cx,cy+s*.42); g.bezierCurveTo(cx-s*1.15,cy-s*.35,cx-s*.5,cy-s*1.05,cx,cy-s*.42); g.bezierCurveTo(cx+s*.5,cy-s*1.05,cx+s*1.15,cy-s*.35,cx,cy+s*.42); g.fill(); }
 
 function statusBar(dark, rec){
-  // Dynamic Island is 20.9 × 6.1 mm, 1.8 mm below the top of the display; the clock and icons sit in the "ears"
-  const pxmm = UW/(DISPLAY.w*100), iw = 20.9*pxmm, ih = 6.1*pxmm, iy = 1.8*pxmm, cy = iy + ih/2;
+  // the clock and icons sit in the "ears" either side of the Dynamic Island, centred on its axis
+  const iw = ISLAND.w*UW, ih = ISLAND.h*UH, icx = ISLAND.cx*UW, cy = ISLAND.cy*UH, iy = cy - ih/2;
   const fg = dark ? '#ffffff' : '#1b1a18';
   ui.fillStyle = fg; ui.font = `600 25px ${SF}`; ui.textBaseline = 'middle'; ui.textAlign = 'center';
-  ui.fillText(hhmm(clock.shown), (UW/2 - iw/2)/2 + 6, cy + 1);
-  ui.fillStyle = '#000'; rr(UW/2 - iw/2, iy, iw, ih, ih/2); ui.fill();
-  if (rec > 0){ ui.fillStyle = `rgba(255,181,71,${rec})`; ui.beginPath(); ui.arc(UW/2 + iw/2 - ih/2, cy, 6, 0, Math.PI*2); ui.fill(); }
-  const rx = UW/2 + iw/2 + (UW/2 - iw/2)/2;
+  ui.fillText(hhmm(clock.shown), (icx - iw/2)/2 + 8, cy + 1);
+  ui.fillStyle = '#000'; rr(icx - iw/2, iy, iw, ih, ih/2); ui.fill();
+  // iOS shows the recording dot in the right ear, next to the island
+  if (rec > 0){ ui.fillStyle = `rgba(255,181,71,${rec})`; ui.beginPath(); ui.arc(icx + iw/2 + 14, cy, 6, 0, Math.PI*2); ui.fill(); }
+  const rx = icx + iw/2 + (UW - icx - iw/2)/2 + 4;
   ui.fillStyle = fg; ui.textAlign = 'left';
   for (let i=0;i<4;i++){ rr(rx - 52 + i*8, cy + 8 - (i+1)*4.4, 5.5, (i+1)*4.4, 1.5); ui.fill(); }
   ui.strokeStyle = fg; ui.lineWidth = 2.6; ui.lineCap = 'round';
@@ -677,7 +852,8 @@ const TAP_POS = STONE_NODE.clone().add(new THREE.Vector3(-.06, .5, .2)).toArray(
 // close enough that the 1.3 mm difference reads: frame the stretch from the lenses to the card's top edge
 const PROFILE_S = 4.4, PROFILE_ROT = [Math.PI/2, 0, Math.PI/2], PROFILE_POS = [.91, .04 - PD/2*PROFILE_S, .3];
 const PHONE_KEYS = [
-  [3.25, [1.4,-2.9,-.8], [.7,-1.4,.35], 1],
+  // it leaves the wall of phones far behind and flies to the viewer, turning once on the way
+  [3.02, [2.2,1.1,-11], [.25,-3.4,.5], 1],
   [3.95, [0,0,0], [-.06,-.34,.05], 1],
   [4.0,  [0,0,0], [-.06,-.34,.05], 1],
   [4.15, [0,.02,0], [-.05,Math.PI-.45,-.04], 1],
@@ -706,7 +882,8 @@ function pose(keys, st, obj){
 }
 const SNAP = 4.33, ARRIVE = 6.56;
 const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
-const CARD_FROM = new THREE.Vector3(-1.2, .55, -1.3), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2);
+// the card glides in from beyond the frame edge, hovers over the back showing its face, then the magnet takes it
+const CARD_FROM = new THREE.Vector3(-3.4, 1.4, -2.6), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2), CARD_IN = 4.03, CARD_HOVER = 4.2;
 const dimsEl = document.getElementById('dims'), dimCard = document.getElementById('dimCard'), dimCam = document.getElementById('dimCam');
 const dA = new THREE.Vector3(), dB = new THREE.Vector3();
 function toScreen(local, out){ out.copy(local); phone.localToWorld(out); out.project(camera); return [(out.x*.5+.5)*innerWidth, (-out.y*.5+.5)*innerHeight]; }
@@ -719,7 +896,7 @@ function dimension(el, pa, pb, label, sub){
 
 function updateStage(st, now){
   const t = now/1000;
-  const vis = smooth(3.2, 3.85, st) * (1 - smooth(7.05, 7.6, st));
+  const vis = smooth(3.02, 3.5, st) * (1 - smooth(7.05, 7.6, st));
   stage.visible = vis > .002;
   uniforms.uDim.value = vis;
   if (!stage.visible) return;
@@ -730,7 +907,7 @@ function updateStage(st, now){
   fx.prevSt = st;
 
   // phone
-  phone.visible = st > 3.22 && st < 7.58;
+  phone.visible = st > 3.03 && st < 7.58;
   pose(PHONE_KEYS, st, phone);
   // idle float, except during the dead-on profile where it has to hold perfectly still
   const still = smooth(4.57, 4.6, st)*(1 - smooth(4.68, 4.71, st));
@@ -738,14 +915,20 @@ function updateStage(st, now){
   // on phones the stage is centred, so slide the lens-to-card stretch of the profile to the middle of the screen
   if (isStacked()) phone.position.x += .5*still;
 
-  // card: magnet pull (accelerating), snap, recording, then off it goes
-  const flyK = clamp01((st-4.15)/(SNAP-4.15)), awayK = smooth(5.0, 5.32, st);
-  card.visible = st > 4.15 && awayK < 1;
+  // card: glide in, hover, magnet pull (accelerating), snap, recording, then off it goes
+  const glideK = smooth(CARD_IN, CARD_HOVER, st), pullK = clamp01((st - CARD_HOVER)/(SNAP - CARD_HOVER)), awayK = smooth(5.0, 5.32, st);
+  card.visible = st > CARD_IN && awayK < 1;
   if (card.visible){
-    const e = flyK*flyK*flyK;
-    card.position.lerpVectors(CARD_FROM, ATTACH, e);
-    card.position.y += Math.sin(flyK*Math.PI)*.2*(1-flyK);
-    card.rotation.set((1-e)*1.1, (1-e)*-.9, (1-e)*2.4);
+    // hover beside the phone (local -x is screen right while the back faces us), a little proud of the back
+    const hover = ATTACH.clone(); hover.x -= .78; hover.y += .08; hover.z -= .32;
+    // glide: a soft arc from off-frame into the hover spot, turning to face the camera and slowly settling
+    card.position.lerpVectors(CARD_FROM, hover, easeIO(glideK));
+    card.position.y += Math.sin(glideK*Math.PI)*.25;
+    const bob = reduced ? 0 : Math.sin(t*2.2)*.012*(1 - pullK);
+    card.position.y += bob;
+    card.rotation.set((1-glideK)*.9 + Math.sin(t*1.4)*.04*(1-pullK), (1-glideK)*-1.6, (1-glideK)*1.2);
+    // pull: accelerates the last few centimetres like a real magnet
+    if (pullK > 0){ const e = pullK*pullK*pullK; card.position.lerp(ATTACH, e); card.rotation.set(card.rotation.x*(1 - e), card.rotation.y*(1 - e), card.rotation.z*(1 - e)); }
     const since = (now - fx.snapT)/1000;
     if (st >= SNAP && since < .5) card.position.z -= Math.sin(Math.min(1,since/.5)*Math.PI*3)*Math.exp(-since*7)*.02;
     if (awayK > 0){ card.position.lerp(CARD_AWAY, easeIO(awayK)); card.rotation.z += awayK*4; }
@@ -929,7 +1112,10 @@ document.getElementById('copy').addEventListener('click', () => {
   else getSelection().selectAllChildren(document.getElementById('mailtxt'));
 });
 
-const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · warm-up day 6/14','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
+const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
+// the automation mix, chosen per phone exactly like the shader does (hash of its seed)
+const glslHash = n => { const x = Math.sin(n*12.9898 + 4.1414)*43758.5453; return x - Math.floor(x); };
+const mixJob = sd => { const p = glslHash(sd*91.7); return p < .38 ? 'whatsapp · typing a reply' : p < .55 ? 'telegram · sending 3/12' : p < .8 ? 'instagram · liking the feed' : 'tiktok · watching, liking'; };
 const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
@@ -942,7 +1128,7 @@ let tapT = 0;
 document.getElementById('hDev').textContent = COUNT;
 
 // ---------- "So far" ----------
-const WALL_MODES = [{img:0}, {t:3}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}];
+const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}];
 const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts holding
 const ROAD = [...document.querySelectorAll('.road li')].map(li => ({li, wall: li.dataset.wall.split('|')}));
 const roadEl = document.querySelector('.road');
@@ -1044,7 +1230,7 @@ function frame(now){
     sel.style.left=(x0-pad)+'px'; sel.style.top=(y0-pad)+'px'; sel.style.width=(x1-x0+pad*2)+'px'; sel.style.height=(y1-y0+pad*2)+'px';
     const inWall = U.uWall.value > .5;
     const typ = (U.uSweep.value > aDelay[hover]) ? U.uTo.value : U.uFrom.value;
-    const job = inWall ? `pixel ${base[hover].c},${base[hover].r}` : JOBS[typ>8.5 ? aType[hover] : typ];
+    const job = inWall ? `pixel ${base[hover].c},${base[hover].r}` : (typ > 6.5 ? mixJob(aSeed[hover]) : JOBS[typ]);
     tag.textContent = `#${String(hover+1).padStart(3,'0')} · ${job}`;
     sel.style.opacity = 1; cross.style.opacity = 0;
   } else { sel.style.opacity = 0; cross.style.opacity = (fine && !reduced && ndc.x<2) ? (overLink ? .35 : .9) : 0; }
@@ -1092,7 +1278,26 @@ function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
   return into <= 1 ? tops[i] + into*hold : tops[i] + hold + (into-1)*innerHeight;
 }
+// ---------- loader: counts phones "coming online" as the models and fonts actually load ----------
+const ld = { el: document.getElementById('loader'), n: document.getElementById('ldN'), bar: document.getElementById('ldBar'), items: 0, total: 1, fonts: 0, t0: performance.now(), done: false };
+THREE.DefaultLoadingManager.onStart = (u, l, t) => { ld.total = Math.max(ld.total, t); };
+THREE.DefaultLoadingManager.onProgress = (u, l, t) => { ld.items = l; ld.total = Math.max(ld.total, t); paintLoader(); };
+THREE.DefaultLoadingManager.onLoad = () => { ld.items = ld.total; paintLoader(); finishLoader(); };
+function paintLoader(){
+  const p = clamp01(.15*ld.fonts + .85*(ld.items/ld.total));
+  ld.n.textContent = String(Math.round(p*512)).padStart(3, '0');
+  ld.bar.style.transform = `scaleX(${p})`;
+}
+function finishLoader(){
+  if (ld.done || !ld.fonts || ld.items < ld.total) return;
+  ld.done = true;
+  // stay at least a moment so it reads as intentional, then lift and let the desk light come up
+  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, Math.max(0, 650 - (performance.now() - ld.t0)));
+}
+setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } }, 9000);
+
 const start = () => {
+  ld.fonts = 1; paintLoader(); finishLoader();
   paintName(); drawNotif(); measure();
   if (SHOT){ scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
   requestAnimationFrame(frame);

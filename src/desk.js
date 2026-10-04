@@ -219,12 +219,12 @@ export function createDesk({ envTex, nameTex, stacked }){
   const AXIS_FAR = SCREEN_C.clone().addScaledVector(SCREEN_N, 4.0);
   const eye = new THREE.Vector3(), tgt = new THREE.Vector3(), up = new THREE.Vector3(0,1,0), WORLD_UP = new THREE.Vector3(0,1,0), vcam = new THREE.Matrix4();
 
+  // the light comes up once the loader lifts (begin), not at the first frame behind it
   let powerT = null;
   function update(st, now, mouse, reduced){
     root.visible = st < 1.06;
     if (!root.visible) return;
-    if (powerT === null) powerT = now;
-    const p = reduced ? 9 : (now - powerT)/1000;
+    const p = reduced ? 9 : powerT === null ? 0 : (now - powerT)/1000;
     // the light comes up from black over the first second and a half, the far wall fades in a beat later
     const on = smooth(.1, 1.5, p);
     pool.color.copy(POOL_NIGHT).lerp(POOL_DAY, day).lerp(POOL_GOLD, gold*.6);
@@ -259,5 +259,5 @@ export function createDesk({ envTex, nameTex, stacked }){
     root.matrixWorldNeedsUpdate = true;
   }
 
-  return { root, update, setDaylight: (d, g) => { day = d; gold = g; } };
+  return { root, update, begin: () => { if (powerT === null) powerT = performance.now(); }, setDaylight: (d, g) => { day = d; gold = g; } };
 }
