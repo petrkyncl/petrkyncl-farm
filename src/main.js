@@ -68,6 +68,23 @@ function wallCanvas(){ const c=document.createElement('canvas'); c.height=1024; 
 const [nameC, nameG] = wallCanvas();
 const [faceC, faceG] = wallCanvas();
 const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTexture(faceC);
+// "So far": the wall becomes a board that rewrites itself milestone by milestone (A = previous, B = next)
+const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
+const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
+function paintBoard(g, tex, lines){
+  const c = g.canvas, w = c.width, h = c.height;
+  g.fillStyle = '#000'; g.fillRect(0,0,w,h);
+  if (lines && lines.length){
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const n = lines.length, longest = Math.max(...lines.map(l => l.length));
+    // keep it about as wide as the name on the hero wall, so it clears the copy column
+    let size = Math.min(h*(n === 1 ? .5 : .4), w*(land ? .6 : .9)/(Math.max(4, longest)*.5));
+    g.font = `900 ${size}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
+    const top = land ? .5 : .28, gap = land ? .42 : .22;
+    lines.forEach((l, i) => g.fillText(l, w/2, h*(top + (i - (n-1)/2)*gap)));
+  }
+  tex.needsUpdate = true;
+}
 
 function paintName(){
   const w=nameC.width, h=nameC.height;
@@ -118,9 +135,10 @@ screenGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(aSeed,1));
 screenGeo.setAttribute('aDelay', new THREE.InstancedBufferAttribute(aDelay,1));
 
 const uniforms = {
-  uTime:{value:0}, uWall:{value:1}, uImg:{value:0}, uFrom:{value:9}, uTo:{value:9}, uSweep:{value:0},
+  uTime:{value:0}, uWall:{value:1}, uFrom:{value:9}, uTo:{value:9}, uSweep:{value:0},
   uHover:{value:-1}, uBoot:{value:reduced?1.1:0}, uGrid:{value:new THREE.Vector2(C,R)},
-  uName:{value:nameTex}, uFace:{value:faceTex}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0}
+  uName:{value:nameTex}, uFace:{value:faceTex}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
+  uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0}
 };
 
 const screenMat = new THREE.ShaderMaterial({
@@ -135,8 +153,8 @@ const screenMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * mv;
     }`,
   fragmentShader:`
-    uniform float uTime, uWall, uImg, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim;
-    uniform vec2 uGrid; uniform sampler2D uName, uFace; uniform vec3 uRoom;
+    uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe;
+    uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB; uniform vec3 uRoom;
     varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth;
     const float ASP = ${(SH/SW).toFixed(4)};
     float hash(float n){ return fract(sin(n*12.9898+4.1414)*43758.5453); }
@@ -314,7 +332,11 @@ const screenMat = new THREE.ShaderMaterial({
       vec3 fc = texture2D(uFace, wuv).rgb;
       float fl = smoothstep(.05, 1.0, dot(fc, vec3(.299,.587,.114)))*.9;
       float nm = texture2D(uName, wuv).r;
-      float img = mix(nm, fl, uImg);
+      // sample everything up front (no texture reads in divergent branches), then pick per cell
+      float bd = mix(texture2D(uBoardA, wuv).r, texture2D(uBoardB, wuv).r, step(vDelay, uBoardWipe));
+      float iA = uImgFrom < .5 ? nm : (uImgFrom < 1.5 ? bd : fl);
+      float iB = uImgTo < .5 ? nm : (uImgTo < 1.5 ? bd : fl);
+      float img = mix(iA, iB, step(vDelay, uImgWipe));
       vec2 pg = fract(vUv*vec2(54.0,112.0));
       img *= .74 + .26*step(.18,pg.x)*step(.18,pg.y);
       float glitch = step(.985, hash(vId*.37 + floor(uTime*3.0)));
@@ -815,6 +837,7 @@ const KP = land ? [
   [6.4,-2.2,10.6,     7.6,-2.4,1.4],
   [-1.6,-3.6,12.4,   -.8,-4.2,.3],
   [4.4,4.2,9.2,       5.4,4.2,.9],
+  [-4.8,.35,fitDist*.98, -4.8,0,0],
   [-4.8,.2,fitDist*1.04, -4.8,0,0]
 ] : [
   [0,.6,fitDist,      0,0,0],
@@ -822,6 +845,7 @@ const KP = land ? [
   [2.4,-1.8,13.4,     2.8,-2,1.5],
   [-1.4,-8.4,14,     -1.2,-8.6,1],
   [2,10.4,13,         2.4,10.2,1.2],
+  [0,.5,fitDist, 0,0,0],
   [0,.4,fitDist*1.04, 0,0,0]
 ];
 const posCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[0],k[1],k[2])), false, 'centripetal');
@@ -859,6 +883,24 @@ new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ rPhones.
   .observe(document.querySelector('.stats'));
 let tapT = 0;
 document.getElementById('hDev').textContent = COUNT;
+
+// ---------- "So far" ----------
+const WALL_MODES = [{img:0}, {t:3}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}];
+const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts holding
+const ROAD = [...document.querySelectorAll('.road li')].map(li => ({li, wall: li.dataset.wall.split('|')}));
+const roadEl = document.querySelector('.road');
+let roadK = -1, roadT0 = -1e9;
+function updateRoad(st, now){
+  const k = Math.max(0, Math.min(ROAD.length-1, Math.floor((st - ROAD_ST)*ROAD.length)));
+  if (k !== roadK){
+    paintBoard(boardAG, boardATex, roadK >= 0 ? ROAD[roadK].wall : null);
+    paintBoard(boardBG, boardBTex, ROAD[k].wall);
+    roadK = k; roadT0 = now;
+    ROAD.forEach((r, i) => { r.li.classList.toggle('on', i === k); r.li.classList.toggle('done', i < k); });
+  }
+  uniforms.uBoardWipe.value = reduced ? 1.1 : clamp01((now - roadT0)/900)*1.1;
+  roadEl.style.setProperty('--p', clamp01(st - ROAD_ST).toFixed(3));
+}
 
 // ---------- loop ----------
 let storyNow = 0;
@@ -898,11 +940,15 @@ function frame(now){
   camera.lookAt(camTgt);
   wall.rotation.y = pmx*.025*pm; wall.rotation.x = -pmy*.015*pm;
 
-  // wall story: mixed, WhatsApp chat, call transcript, bracelet pulse, dorm gate
-  const U = uniforms, types = [9,3,5,6,2];
-  if (a===0){ U.uWall.value = 1-loc; U.uImg.value=0; U.uFrom.value=9; U.uTo.value=types[1]; U.uSweep.value=smooth(.5,1,loc)*1.05; }
-  else if (a===S-2){ U.uWall.value = loc; U.uImg.value=1; U.uFrom.value=types[a]; U.uTo.value=types[a]; U.uSweep.value=0; }
-  else { U.uWall.value=0; U.uImg.value=1; U.uFrom.value=types[a]; U.uTo.value=types[a+1]; U.uSweep.value=loc*1.05; }
+  // wall story. Each wall chapter either shows app screens (t = screen type) or a full-wall image
+  // (img: 0 name, 1 milestone board, 2 hackathon photo); transitions sweep across the phones
+  const U = uniforms, A = WALL_MODES[a], B = WALL_MODES[a+1];
+  const isImg = m => m.img !== undefined ? 1 : 0;
+  U.uWall.value = lerp(isImg(A), isImg(B), loc);
+  U.uFrom.value = a === 0 ? 9 : (A.t ?? B.t ?? 9); U.uTo.value = B.t ?? A.t ?? 9;
+  U.uSweep.value = (a === 0 ? smooth(.5, 1, loc) : loc)*1.05;
+  U.uImgFrom.value = A.img ?? B.img ?? 0; U.uImgTo.value = B.img ?? A.img ?? 0; U.uImgWipe.value = loc*1.05;
+  updateRoad(st, now);
 
   const deskP = 1 - smooth(.97, 1.03, st);
   wall.visible = deskP < .999;

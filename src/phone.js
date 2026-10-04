@@ -1,7 +1,8 @@
 // iPhone 17 Pro Max in Deep Blue, body to Apple's published dimensions (163.4 × 78.0 × 8.75 mm).
-// Back layout measured from Petr's reference render: a rounded camera module top-left (~52 × 45 mm,
-// 2.5 mm proud, lenses another 1.7 mm), three lenses in a triangle, flash / mic / LiDAR in a column on the
-// right of the module, a frosted glass panel over most of the back with the Apple logo in its lower half.
+// Back layout measured off Petr's reference photo (461 × 963 px body = 78 × 163.4 mm, 5.91 px/mm):
+// camera plateau almost full width (4 mm in from each edge, 43 mm tall, 2.5 mm proud, lenses +1.7 mm),
+// 17 mm lenses in a triangle, flash top-right with the mic and LiDAR below it, a glass panel with the same
+// side margins 7.6 mm under the plateau, and an 18 mm Apple logo at two thirds of the height.
 // Plus the Recents card: credit-card sized (54 × 85.6 mm), 2.9 mm thick, matte black, like Ruune.
 // Scene unit = 10 cm, so 1 mm = .01.
 import * as THREE from 'three';
@@ -9,7 +10,7 @@ import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { slab, flat, faceBack } from './shapes.js';
 
 export const PW = .780, PH = 1.634, PD = .0875;
-export const PLATEAU = { w: .516, h: .453, r: .1, rise: .0248, lens: .0169 };
+export const PLATEAU = { w: .697, h: .432, rt: .09, rb: .055, rise: .0248, lens: .0169 };
 export const CARD = { w: .54, h: .856, d: .029, r: .07 };
 export const DISPLAY = { w: PW - .036, h: PH - .036, r: .095 };
 
@@ -86,34 +87,31 @@ export function createPhone(envTex){
   const sheen = new THREE.Mesh(flat(PW-.004, PH-.004, .122), new THREE.MeshStandardMaterial({color:0x000000, roughness:.05, metalness:0, envMap:envTex, envMapIntensity:1.4, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
   sheen.position.z = PD/2 + .0018; phone.add(sheen);
 
-  // back: camera module in the top-left corner (seen from behind), i.e. on the +x side in the front-facing frame.
-  // b(…) converts "mm from the module's left / top edge, as seen from behind" into local coordinates.
+  // back. Positions are in local front-facing coordinates; seen from behind, +x is on the viewer's left.
   const backZ = -PD/2, platZ = backZ - PLATEAU.rise;
-  const mL = PW/2 - .02, mT = PH/2 - .02;
-  const b = (bx, by) => [mL - bx, mT - by];
-  const [mx, my] = b(PLATEAU.w/2, PLATEAU.h/2), yP = my;
-  const plat = new THREE.Mesh(new THREE.ExtrudeGeometry(rr4Shape(PLATEAU.w, PLATEAU.h, PLATEAU.r, PLATEAU.r), {depth:PLATEAU.rise-.01, bevelEnabled:true, bevelThickness:.005, bevelSize:.006, bevelSegments:5, curveSegments:28}), [alu, rail]);
-  plat.rotation.y = Math.PI; plat.position.set(mx, my, backZ + .005); phone.add(plat);
+  const yP = .565;
+  const plat = new THREE.Mesh(new THREE.ExtrudeGeometry(rr4Shape(PLATEAU.w, PLATEAU.h, PLATEAU.rt, PLATEAU.rb), {depth:PLATEAU.rise-.01, bevelEnabled:true, bevelThickness:.005, bevelSize:.006, bevelSegments:5, curveSegments:32}), [alu, rail]);
+  plat.rotation.y = Math.PI; plat.position.set(-.0025, yP, backZ + .005); phone.add(plat);
 
   const lensM = new THREE.MeshPhysicalMaterial({map:lensTexture(), roughness:.08, clearcoat:.3, clearcoatRoughness:.1, envMap:envTex, envMapIntensity:.32});
   const ringM = new THREE.MeshPhysicalMaterial({color:0x2a3346, metalness:1, roughness:.2, envMap:envTex, envMapIntensity:1});
   const blackM = new THREE.MeshStandardMaterial({color:0x050506, roughness:.6});
-  const LR = .08;
-  const lens = ([x, y]) => {
+  const LR = .0846;
+  const lens = (x, y) => {
     const g = new THREE.Group(); g.position.set(x, y, platZ); phone.add(g);
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(LR*.97, LR, PLATEAU.lens, 72), ringM); ring.rotation.x = -Math.PI/2; ring.position.z = -PLATEAU.lens/2; g.add(ring);
-    const lip = faceBack(new THREE.Mesh(new THREE.RingGeometry(.058, LR*.96, 72), blackM)); lip.position.z = -PLATEAU.lens - .0004; g.add(lip);
-    const cover = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.06, 72), lensM)); cover.position.z = -PLATEAU.lens - .0006; g.add(cover);
+    const lip = faceBack(new THREE.Mesh(new THREE.RingGeometry(.072, LR*.965, 72), blackM)); lip.position.z = -PLATEAU.lens - .0004; g.add(lip);
+    const cover = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.0735, 72), lensM)); cover.position.z = -PLATEAU.lens - .0006; g.add(cover);
   };
-  lens(b(.116, .116)); lens(b(.116, .337)); lens(b(.316, .228));
-  const dot = (pos, r, m) => { const d = faceBack(new THREE.Mesh(new THREE.CircleGeometry(r, 48), m)); d.position.set(pos[0], pos[1], platZ - .0006); phone.add(d); };
-  dot(b(.432, .095), .03, new THREE.MeshStandardMaterial({map:flashTexture(), roughness:.35}));
-  dot(b(.432, .21), .006, blackM);
-  dot(b(.432, .316), .033, glass);
+  lens(.235, .672); lens(.235, .448); lens(.039, .560);
+  const dot = (x, y, r, m) => { const d = faceBack(new THREE.Mesh(new THREE.CircleGeometry(r, 48), m)); d.position.set(x, y, platZ - .0006); phone.add(d); };
+  dot(-.261, .676, .036, new THREE.MeshStandardMaterial({map:flashTexture(), roughness:.35}));
+  dot(-.245, .556, .0055, blackM);
+  dot(-.241, .449, .036, glass);
 
-  // frosted glass panel over most of the back, Apple logo over the MagSafe magnets
-  const panel = faceBack(new THREE.Mesh(flat(.738, 1.05, .095), shield)); panel.position.set(0, -.235, backZ - .0006); phone.add(panel);
-  const logo = faceBack(new THREE.Mesh(appleLogoGeometry(.11), logoM)); logo.position.set(0, -.193, backZ - .0011); phone.add(logo);
+  // glass panel with the same side margins as the plateau, Apple logo over the MagSafe magnets
+  const panel = faceBack(new THREE.Mesh(flat(.694, 1.037, .076), shield)); panel.position.set(-.001, -.2455, backZ - .0006); phone.add(panel);
+  const logo = faceBack(new THREE.Mesh(appleLogoGeometry(.178), logoM)); logo.position.set(0, -.234, backZ - .0011); phone.add(logo);
 
   // buttons: Action, volume up/down on the left; side button and Camera Control on the right
   const btn = (x, y, len, m) => { const b = new THREE.Mesh(slab(.03, len, .009, .012, .003), [m, m]); b.rotation.y = Math.PI/2; b.position.set(x, y, 0); phone.add(b); };
@@ -121,7 +119,7 @@ export function createPhone(envTex){
   btn(PW/2 + .002, .23, .19, rail);
   btn(PW/2 + .001, -.25, .12, new THREE.MeshPhysicalMaterial({color:0x10131a, roughness:.1, clearcoat:1, envMap:envTex}));
 
-  return { phone, display, yP, backZ, platZ, lensTop: platZ - PLATEAU.lens, lensEdge: [b(.116, .337)[0] + LR, b(.116, .337)[1]], magsafe: [0, -.193] };
+  return { phone, display, yP, backZ, platZ, lensTop: platZ - PLATEAU.lens, lensEdge: [.235 + LR, .448], magsafe: [0, -.234] };
 }
 
 export function createCard(envTex){
