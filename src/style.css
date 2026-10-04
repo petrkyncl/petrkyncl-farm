@@ -56,11 +56,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .nav a{display:block;text-decoration:none;color:var(--dim);text-shadow:0 0 6px var(--room),0 0 14px var(--room),0 0 22px var(--room);font-size:9px;font-weight:200;letter-spacing:.3em;text-transform:uppercase;text-align:right}
 .nav a.on{color:var(--amber)}
 
-#sel{position:fixed;z-index:6;pointer-events:none;border:1px solid var(--amber);opacity:0;transition:opacity .12s;box-sizing:border-box}
-#sel::before,#sel::after{content:"";position:absolute;width:10px;height:10px;border-color:var(--amber);border-style:solid}
-#sel::before{left:-5px;top:-5px;border-width:2px 0 0 2px}
-#sel::after{right:-5px;bottom:-5px;border-width:0 2px 2px 0}
-#sel .tag{position:absolute;left:-1px;bottom:calc(100% + 6px);white-space:nowrap;background:var(--amber);color:#1a1205;font-size:10px;letter-spacing:.08em;padding:4px 7px;text-transform:uppercase}
+/* the selection itself is drawn in the shader along the phone's edge; this box only anchors the label above it */
+#sel{position:fixed;z-index:6;pointer-events:none;opacity:0;transition:opacity .15s;box-sizing:border-box}
+#sel::before{content:"";position:absolute;left:50%;bottom:calc(100% + 2px);width:1px;height:14px;background:var(--amber);box-shadow:0 0 6px var(--amber)}
+#sel .tag{position:absolute;left:50%;bottom:calc(100% + 16px);transform:translateX(-50%);white-space:nowrap;background:rgba(6,7,10,.86);border:1px solid rgba(255,181,71,.55);color:var(--text);font-size:9px;font-weight:300;letter-spacing:.18em;padding:5px 9px;text-transform:uppercase;backdrop-filter:blur(6px)}
+#sel .tag b{color:var(--amber);font-weight:400;margin-right:8px}
 #cross{position:fixed;z-index:6;width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;opacity:0}
 #cross::before,#cross::after{content:"";position:absolute;background:var(--text)}
 #cross::before{left:10px;top:0;width:2px;height:22px}

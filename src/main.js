@@ -126,12 +126,15 @@ const wallGlass = new THREE.MeshPhysicalMaterial({color:0x040507, roughness:.32,
 const wallRail = new THREE.MeshStandardMaterial({color:0x3b3f47, metalness:.9, roughness:.38, envMap:envTex, envMapIntensity:.3});
 const bodies = new THREE.InstancedMesh(slab(BW,BH,BD,.135,.022), [wallGlass, wallRail], COUNT);
 const screenGeo = new THREE.PlaneGeometry(SW,SH);
-const aCell = new Float32Array(COUNT*2), aId = new Float32Array(COUNT), aType = new Float32Array(COUNT), aSeed = new Float32Array(COUNT), aDelay = new Float32Array(COUNT);
+const aCell = new Float32Array(COUNT*2), aId = new Float32Array(COUNT), aType = new Float32Array(COUNT), aSeed = new Float32Array(COUNT), aDelay = new Float32Array(COUNT), aApp = new Float32Array(COUNT);
 for (let i=0;i<COUNT;i++){
   const b=base[i]; aCell[i*2]=b.c; aCell[i*2+1]=b.r; aId[i]=i;
   aType[i]=Math.floor(rnd()*5); aSeed[i]=rnd();
   aDelay[i]= (b.c/(C-1))*.75 + rnd()*.25; // left-to-right wave with jitter
+  // which app this phone runs in the automation mix (picked here so the hover label always matches the screen)
+  const pk = rnd(); aApp[i] = pk < .38 ? 0 : pk < .55 ? 1 : pk < .8 ? 2 : 3;
 }
+screenGeo.setAttribute('aApp', new THREE.InstancedBufferAttribute(aApp,1));
 screenGeo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell,2));
 screenGeo.setAttribute('aId', new THREE.InstancedBufferAttribute(aId,1));
 screenGeo.setAttribute('aType', new THREE.InstancedBufferAttribute(aType,1));
@@ -148,10 +151,10 @@ const uniforms = {
 const screenMat = new THREE.ShaderMaterial({
   uniforms,
   vertexShader:`
-    attribute vec2 aCell; attribute float aId, aType, aSeed, aDelay;
-    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth;
+    attribute vec2 aCell; attribute float aId, aType, aSeed, aDelay, aApp;
+    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
     void main(){
-      vUv=uv; vCell=aCell; vId=aId; vType=aType; vSeed=aSeed; vDelay=aDelay;
+      vUv=uv; vCell=aCell; vId=aId; vType=aType; vSeed=aSeed; vDelay=aDelay; vApp=aApp;
       vec4 mv = modelViewMatrix * instanceMatrix * vec4(position,1.0);
       vDepth = -mv.z;
       gl_Position = projectionMatrix * mv;
@@ -159,7 +162,7 @@ const screenMat = new THREE.ShaderMaterial({
   fragmentShader:`
     uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe;
     uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB; uniform vec3 uRoom;
-    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth;
+    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
     const float ASP = ${(SH/SW).toFixed(4)};
     float hash(float n){ return fract(sin(n*12.9898+4.1414)*43758.5453); }
     float sdBox(vec2 p, vec2 b, float r){ vec2 q=abs(p)-b+r; return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r; }
@@ -444,7 +447,7 @@ const screenMat = new THREE.ShaderMaterial({
     vec3 tiktokApp(vec2 q, float t, float s){
       float L = 4.2, tt = t + s*L*5.0, n = floor(tt/L), k = tt - n*L;
       float sw = smoothstep(3.55, 4.2, k);
-      float vy = q.y + sw*ASP, vi = n + floor(vy/ASP), y = mod(vy, ASP);
+      float vy = q.y - sw*ASP, vi = n - floor(vy/ASP), y = mod(vy, ASP);
       vec2 uv = vec2(q.x, y/ASP);
       // the video: a slow push-in on a seeded photo, a person swaying in front of it
       vec2 zuv = (uv - .5)*(1.0 - .06*fract(t*.2)) + .5;
@@ -479,10 +482,9 @@ const screenMat = new THREE.ShaderMaterial({
 
     // what a phone on the farm is doing right now: mostly chats, some feeds
     vec3 automation(vec2 q, float t, float s){
-      float pick = hash(s*91.7);
-      if (pick < .38) return chatApp(q, t, s, 0.0);
-      if (pick < .55) return chatApp(q, t, s, 1.0);
-      if (pick < .8) return instaApp(q, t, s);
+      if (vApp < .5) return chatApp(q, t, s, 0.0);
+      if (vApp < 1.5) return chatApp(q, t, s, 1.0);
+      if (vApp < 2.5) return instaApp(q, t, s);
       return tiktokApp(q, t, s);
     }
 
@@ -491,7 +493,11 @@ const screenMat = new THREE.ShaderMaterial({
       vec2 pp = (vUv - .5)*vec2(${SW.toFixed(3)}, ${SH.toFixed(3)});
       float dEdge = sdBox(pp, vec2(${(SW/2).toFixed(4)}, ${(SH/2).toFixed(4)}), .108);
       if (dEdge > 0.0) discard;
-      vec2 q = vec2(vUv.x, vUv.y*ASP);
+      // apps live above a black strip at the bottom that holds the gesture handle, like Android draws it
+      const float NAV = .1;
+      vec2 q0 = vec2(vUv.x, vUv.y*ASP);
+      vec2 q = vec2(q0.x, (q0.y - NAV)*ASP/(ASP - NAV));
+      float isHover = step(abs(vId - uHover), .5);
       float t = uTime + vSeed*30.0;
       float typ = vDelay < uSweep ? uTo : uFrom;
       if (typ > 8.5) typ = 7.0; // "mixed" means the automation mix
@@ -510,18 +516,23 @@ const screenMat = new THREE.ShaderMaterial({
       vec2 pg = fract(vUv*vec2(54.0,112.0));
       img *= .74 + .26*step(.18,pg.x)*step(.18,pg.y);
       float glitch = step(.985, hash(vId*.37 + floor(uTime*3.0)));
-      float wm = smoothstep(vDelay, vDelay+.2, uWall*1.25) * (1.0 - glitch*.85*step(.99,uWall));
+      // hovering a phone in an image (name, board, photo) lifts it out of the picture to show what it's running
+      float wm = smoothstep(vDelay, vDelay+.2, uWall*1.25) * (1.0 - glitch*.85*step(.99,uWall)) * (1.0 - isHover);
 
       vec3 bg = vec3(.028,.036,.058);
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
       vec3 ac = typ > 6.5 ? automation(q, t, vSeed) : ((typ > 2.5 && typ < 3.5) ? chatApp(q, t, vSeed, 0.0) : bg + (ink-bg)*a);
-      vec3 col = mix(ac*mix(1.0,.3,uWall), bg + (ink-bg)*img*1.05, wm);
+      vec3 col = mix(ac*mix(1.0, .3, uWall*(1.0 - isHover)), bg + (ink-bg)*img*1.05, wm);
+      col = mix(col, vec3(0.0), step(q0.y, NAV)*(1.0 - wm));
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
       col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
-      if (abs(vId-uHover) < .5) col = col*1.45 + vec3(.06,.035,0.0);
+      // selection: a thin amber line that follows the screen's rounded edge, a faint inner glow, and a lift in brightness
+      col *= 1.0 + .06*isHover;
+      col = mix(col, vec3(1.0,.71,.28), isHover*(1.0 - smoothstep(.004, .011, -dEdge)));
+      col += vec3(1.0,.71,.28)*isHover*.05*(1.0 - smoothstep(.0, .07, -dEdge));
       // Android: punch-hole camera at the top, gesture bar at the bottom
       col *= smoothstep(0.0, .006, length(pp - vec2(0.0, ${(SH/2-.062).toFixed(4)})) - .027);
-      col = mix(col, vec3(.78,.8,.84), fillD(sdBox(pp - vec2(0.0, ${(-SH/2+.04).toFixed(4)}), vec2(.12,.008), .008), .005)*.75);
+      col = mix(col, vec3(.78,.8,.84), fillD(sdBox(pp - vec2(0.0, ${(-SH/2 + .05*SW).toFixed(4)}), vec2(.12,.008), .008), .005)*.75*(1.0 - wm));
       float on = step(vSeed, uBoot);
       float flash = on*(1.0-smoothstep(0.0,.06,uBoot-vSeed));
       col = mix(bg*.35, col, on) + vec3(.6,.65,.75)*flash;
@@ -553,7 +564,8 @@ function place(i){
   const k = 1 + l*.08;
   tmpP.set(b.x,b.y,b.z).addScaledVector(N, l*.9); tmpS.set(k,k,k);
   tmpM.compose(tmpP,tmpQ,tmpS); bodies.setMatrixAt(i,tmpM); cables.setMatrixAt(i,tmpM);
-  tmpP.addScaledVector(N, BD/2+.002); tmpM.compose(tmpP,tmpQ,tmpS); screens.setMatrixAt(i,tmpM);
+  // the body grows by k when lifted, so its front moves out too: keep the screen in front of it
+  tmpP.addScaledVector(N, BD*k/2+.002); tmpM.compose(tmpP,tmpQ,tmpS); screens.setMatrixAt(i,tmpM);
 }
 for (let i=0;i<COUNT;i++){
   place(i);
@@ -1071,26 +1083,39 @@ function storyAt(y){
 
 // ---------- camera path ----------
 const fitDist = (R*SY/2)/Math.tan(THREE.MathUtils.degToRad(20)) * (land ? 1.12 : 1.02);
+// [wp, eye xyz, target xyz]: wp is the wall chapter position (0 name, 1 MationX, 2 Recents …). The MationX stretch
+// (0.5 → 2) is one long crane move: it starts high on the left and arcs down and across to the lower right,
+// pushing in at the middle, so the camera is travelling the whole time the MationX copy is on screen.
 const KP = land ? [
-  [-4.8,.4,fitDist,  -4.8,0,0],
-  [-6.2,2.4,9.8,     -7.2,2.2,1.2],
-  [6.4,-2.2,10.6,     7.6,-2.4,1.4],
-  [-1.6,-3.6,12.4,   -.8,-4.2,.3],
-  [4.4,4.2,9.2,       5.4,4.2,.9],
-  [-4.8,.35,fitDist*.98, -4.8,0,0],
-  [-4.8,.2,fitDist*1.04, -4.8,0,0]
+  [0,   -4.8,.4,fitDist,    -4.8,0,0],
+  [.55, -8.4,4.6,11.6,      -7.4,3.8,1.2],
+  [1,   -4.6,3.1,8.9,       -3.7,2.4,1.0],
+  [1.5,  .9,1.1,8.2,         1.6,.5,1.0],
+  [2,    6.4,-2.2,10.6,      7.6,-2.4,1.4],
+  [3,   -1.6,-3.6,12.4,      -.8,-4.2,.3],
+  [4,    4.4,4.2,9.2,        5.4,4.2,.9],
+  [5,   -4.8,.35,fitDist*.98, -4.8,0,0],
+  [6,   -4.8,.2,fitDist*1.04, -4.8,0,0]
 ] : [
-  [0,.6,fitDist,      0,0,0],
-  [-2.4,6.4,13,      -2.6,6.2,1.5],
-  [2.4,-1.8,13.4,     2.8,-2,1.5],
-  [-1.4,-8.4,14,     -1.2,-8.6,1],
-  [2,10.4,13,         2.4,10.2,1.2],
-  [0,.5,fitDist, 0,0,0],
-  [0,.4,fitDist*1.04, 0,0,0]
+  [0,    0,.6,fitDist,      0,0,0],
+  [.55, -3.4,9.4,15,       -3.0,8.8,1.5],
+  [1,   -2.0,5.6,12.6,     -1.8,5.2,1.5],
+  [1.5,   .9,1.6,12.2,       1.1,1.2,1.5],
+  [2,    2.4,-1.8,13.4,     2.8,-2,1.5],
+  [3,   -1.4,-8.4,14,     -1.2,-8.6,1],
+  [4,    2,10.4,13,         2.4,10.2,1.2],
+  [5,    0,.5,fitDist,      0,0,0],
+  [6,    0,.4,fitDist*1.04, 0,0,0]
 ];
-const posCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[0],k[1],k[2])), false, 'centripetal');
-const tgtCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[3],k[4],k[5])), false, 'centripetal');
-const S = KP.length;
+const posCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[1],k[2],k[3])), false, 'centripetal');
+const tgtCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[4],k[5],k[6])), false, 'centripetal');
+const S = 7; // wall chapters
+// wp → curve parameter (the curve is parametrised by point index)
+function camParam(wp){
+  let j = 0; while (j < KP.length - 2 && wp >= KP[j+1][0]) j++;
+  const f = clamp01((wp - KP[j][0])/(KP[j+1][0] - KP[j][0]));
+  return (j + f)/(KP.length - 1);
+}
 
 // ---------- input ----------
 const ndc = new THREE.Vector2(9,9), ray = new THREE.Raycaster();
@@ -1114,8 +1139,7 @@ document.getElementById('copy').addEventListener('click', () => {
 
 const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
 // the automation mix, chosen per phone exactly like the shader does (hash of its seed)
-const glslHash = n => { const x = Math.sin(n*12.9898 + 4.1414)*43758.5453; return x - Math.floor(x); };
-const mixJob = sd => { const p = glslHash(sd*91.7); return p < .38 ? 'whatsapp · typing a reply' : p < .55 ? 'telegram · sending 3/12' : p < .8 ? 'instagram · liking the feed' : 'tiktok · watching, liking'; };
+const mixJob = i => ['whatsapp · typing a reply','telegram · sending 3/12','instagram · liking the feed','tiktok · watching, liking'][aApp[i]];
 const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
@@ -1173,7 +1197,8 @@ function frame(now){
   const loc = smooth(.18,.86,f);
 
   // camera
-  const tt = (a+loc)/(S-1);
+  // the camera follows the scroll continuously (the smoothed scroll already eases it); no dwell between chapters
+  const tt = camParam(Math.min(wp, S-1));
   posCurve.getPoint(tt, camPos); tgtCurve.getPoint(tt, camTgt);
   pmx += (mx-pmx)*.05; pmy += (my-pmy)*.05;
   const pm = (reduced || !fine) ? 0 : 1;
@@ -1230,8 +1255,8 @@ function frame(now){
     sel.style.left=(x0-pad)+'px'; sel.style.top=(y0-pad)+'px'; sel.style.width=(x1-x0+pad*2)+'px'; sel.style.height=(y1-y0+pad*2)+'px';
     const inWall = U.uWall.value > .5;
     const typ = (U.uSweep.value > aDelay[hover]) ? U.uTo.value : U.uFrom.value;
-    const job = inWall ? `pixel ${base[hover].c},${base[hover].r}` : (typ > 6.5 ? mixJob(aSeed[hover]) : JOBS[typ]);
-    tag.textContent = `#${String(hover+1).padStart(3,'0')} · ${job}`;
+    const job = (inWall || typ > 6.5) ? mixJob(hover) : JOBS[typ];
+    tag.innerHTML = `<b>#${String(hover+1).padStart(3,'0')}</b>${job}`;
     sel.style.opacity = 1; cross.style.opacity = 0;
   } else { sel.style.opacity = 0; cross.style.opacity = (fine && !reduced && ndc.x<2) ? (overLink ? .35 : .9) : 0; }
 
