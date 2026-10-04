@@ -207,6 +207,7 @@ export function createDesk({ envTex, nameTex, stacked }){
   const SCREEN_U = new THREE.Vector3(0, .926, -.376).applyAxisAngle(Y, mac.rotation.y);
   const AXIS_FAR = SCREEN_C.clone().addScaledVector(SCREEN_N, 4.0);
   const eye = new THREE.Vector3(), tgt = new THREE.Vector3(), up = new THREE.Vector3(0,1,0), WORLD_UP = new THREE.Vector3(0,1,0), vcam = new THREE.Matrix4();
+  let camKey = '', eyeC = null, tgtC = null;
 
   // the light comes up once the loader lifts (begin), not at the first frame behind it
   let powerT = null;
@@ -237,9 +238,17 @@ export function createDesk({ envTex, nameTex, stacked }){
 
     // virtual camera
     const S = shots();
-    if (st < .55){ const k = easeIO(clamp01(st/.55)); eye.lerpVectors(S.A[0], S.B[0], k); tgt.lerpVectors(S.A[1], S.B[1], k); up.copy(WORLD_UP); }
-    else if (st < .8){ const k = easeIO((st-.55)/.25); eye.lerpVectors(S.B[0], AXIS_FAR, k); tgt.lerpVectors(S.B[1], SCREEN_C, k); up.lerpVectors(WORLD_UP, SCREEN_U, k).normalize(); }
-    else { const k = easeIn(clamp01((st-.8)/.2)); eye.lerpVectors(AXIS_FAR, C_EYE, k); tgt.copy(SCREEN_C); up.copy(SCREEN_U); }
+    // one spline through wide → over the MacBook → onto the screen's axis → into the screen, so it never stops:
+    // it eases out of the opening frame and then keeps going all the way into the dive
+    const key = stacked() ? 'm' : 'd';
+    if (camKey !== key){
+      camKey = key;
+      eyeC = new THREE.CatmullRomCurve3([S.A[0], S.B[0], AXIS_FAR, C_EYE], false, 'centripetal');
+      tgtC = new THREE.CatmullRomCurve3([S.A[1], S.B[1], SCREEN_C.clone().addScaledVector(SCREEN_N, -.5), SCREEN_C.clone().addScaledVector(SCREEN_N, -1)], false, 'centripetal');
+    }
+    const s01 = clamp01(st), uu = s01 < .25 ? 2*s01*s01 : s01 - .125; // ease-in, then constant speed
+    eyeC.getPoint(clamp01(uu/.875), eye); tgtC.getPoint(clamp01(uu/.875), tgt);
+    up.lerpVectors(WORLD_UP, SCREEN_U, smooth(.45, .85, st)).normalize();
     const drift = (1 - smooth(.55, .78, st));
     eye.x += mouse.x*.6*drift + Math.sin(now*.00023)*.18*drift;
     eye.y += mouse.y*.35*drift + Math.cos(now*.00019)*.12*drift;
