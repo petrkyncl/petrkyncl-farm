@@ -1003,7 +1003,8 @@ function frame(now){
 
   const deskP = 1 - smooth(.97, 1.03, st);
   wall.visible = deskP < .999;
-  amb.intensity *= 1 - .7*deskP; key.intensity *= 1 - .6*deskP;
+  // the desk brings its own lights; the wall's blue-tinted rig stays out of the room
+  amb.intensity *= 1 - .95*deskP; key.intensity *= 1 - deskP; rim.intensity *= 1 - deskP;
   desk.update(st, now, {x:pmx*pm, y:pmy*pm}, reduced);
   flashEl.style.opacity = (smooth(.9, 1.0, st)*(1 - smooth(1.0, 1.14, st))*.9).toFixed(3);
   updateStage(st - 2, now);
