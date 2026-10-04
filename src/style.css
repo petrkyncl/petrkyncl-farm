@@ -92,7 +92,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .hud b.reel{vertical-align:-.12em}
 
 /* "So far" timeline */
-.road{list-style:none;margin:0;padding:0 0 0 20px;border-left:1px solid var(--rule);display:flex;flex-direction:column;gap:11px;position:relative;max-width:30rem}
+.road{list-style:none;margin:0;padding:0 0 0 20px;border-left:1px solid var(--rule);display:flex;flex-direction:column;gap:11px;position:relative;max-width:27rem}
 .road::before{content:"";position:absolute;left:-1px;top:0;width:1px;height:calc(var(--p,0)*100%);background:var(--amber);box-shadow:0 0 8px var(--amber)}
 .road li{opacity:.3;transition:opacity .45s,transform .45s;font-weight:300;font-size:clamp(12px,.95vw,14px);line-height:1.45;color:#c4c8d4}
 .road li b{display:block;font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);margin-bottom:2px;transition:color .45s}

@@ -76,12 +76,15 @@ function paintBoard(g, tex, lines){
   g.fillStyle = '#000'; g.fillRect(0,0,w,h);
   if (lines && lines.length){
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    const n = lines.length, longest = Math.max(...lines.map(l => l.length));
-    // keep it about as wide as the name on the hero wall, so it clears the copy column
-    let size = Math.min(h*(n === 1 ? .5 : .4), w*(land ? .6 : .9)/(Math.max(4, longest)*.5));
-    g.font = `900 ${size}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
-    const top = land ? .5 : .28, gap = land ? .42 : .22;
-    lines.forEach((l, i) => g.fillText(l, w/2, h*(top + (i - (n-1)/2)*gap)));
+    const n = lines.length;
+    // measured fit: never wider than the hero name, and centred a little right so it clears the copy column
+    const font = s => `900 ${s}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
+    let size = h*(n === 1 ? .5 : .4);
+    g.font = font(size);
+    const widest = Math.max(...lines.map(l => g.measureText(l).width)), maxW = w*(land ? .42 : .86);
+    if (widest > maxW){ size *= maxW/widest; g.font = font(size); }
+    const cx = land ? w*.57 : w/2, top = land ? .5 : .28, gap = land ? .42 : .22;
+    lines.forEach((l, i) => g.fillText(l, cx, h*(top + (i - (n-1)/2)*gap)));
   }
   tex.needsUpdate = true;
 }
@@ -118,7 +121,8 @@ function wallPoint(u, v, out){
 
 // ---------- wall geometry ----------
 // each slot is an Android phone: rounded glass slab, metal rail, punch-hole screen, USB-C cable running back into the rack
-const wallGlass = new THREE.MeshPhysicalMaterial({color:0x040507, roughness:.14, metalness:0, clearcoat:1, clearcoatRoughness:.08, envMap:envTex, envMapIntensity:.32});
+// glossy, but not so glossy that the key light's specular blooms into a blob across a cluster of phones
+const wallGlass = new THREE.MeshPhysicalMaterial({color:0x040507, roughness:.32, metalness:0, clearcoat:.6, clearcoatRoughness:.38, envMap:envTex, envMapIntensity:.32});
 const wallRail = new THREE.MeshStandardMaterial({color:0x3b3f47, metalness:.9, roughness:.38, envMap:envTex, envMapIntensity:.3});
 const bodies = new THREE.InstancedMesh(slab(BW,BH,BD,.135,.022), [wallGlass, wallRail], COUNT);
 const screenGeo = new THREE.PlaneGeometry(SW,SH);
@@ -345,7 +349,7 @@ const screenMat = new THREE.ShaderMaterial({
       vec3 bg = vec3(.028,.036,.058);
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
       vec3 ac = (typ > 2.5 && typ < 3.5) ? whatsapp(q, t, vSeed) : bg + (ink-bg)*a;
-      vec3 col = mix(ac*mix(1.0,.55,uWall), bg + (ink-bg)*img*1.05, wm);
+      vec3 col = mix(ac*mix(1.0,.3,uWall), bg + (ink-bg)*img*1.05, wm);
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
       col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
       if (abs(vId-uHover) < .5) col = col*1.45 + vec3(.06,.035,0.0);
@@ -731,6 +735,8 @@ function updateStage(st, now){
   // idle float, except during the dead-on profile where it has to hold perfectly still
   const still = smooth(4.57, 4.6, st)*(1 - smooth(4.68, 4.71, st));
   if (!reduced){ phone.position.y += Math.sin(t*1.1)*.018*(1-still); phone.rotation.z += Math.sin(t*.8)*.012*(1-still); }
+  // on phones the stage is centred, so slide the lens-to-card stretch of the profile to the middle of the screen
+  if (isStacked()) phone.position.x += .5*still;
 
   // card: magnet pull (accelerating), snap, recording, then off it goes
   const flyK = clamp01((st-4.15)/(SNAP-4.15)), awayK = smooth(5.0, 5.32, st);
@@ -1059,12 +1065,12 @@ function frame(now){
     for (let k=0;k<6;k++){ const i=Math.floor(Math.random()*COUNT); leds.setColorAt(i, Math.random()>.5 ? LEDOFF : (Math.random()>.85 ? AMBER : LEDGREEN)); }
     leds.instanceColor.needsUpdate = true;
   }
-  tapT += dt; if (tapT > .3){ tapT = 0; rTaps.set(tapsNow()); }
+  tapT += dt; if (tapT > 1.4){ tapT = 0; rTaps.set(tapsNow()); } // a roll now and then, not a constant blur
   hudT += dt;
   if (hudT > .5){
     hudT = 0;
     jobs = Math.max(COUNT-6, Math.min(COUNT, jobs + (Math.random()>.5?1:-1)));
-    phones = Math.max(498, Math.min(526, phones + Math.round((Math.random()-.5)*3)));
+    if (Math.random() < .12) phones = Math.max(498, Math.min(526, phones + (Math.random() > .5 ? 1 : -1)));
     rJobs.set(String(jobs));
     rPhones.set(String(phones));
     hTime.textContent = hhmm(clock.preview ?? clock.live);

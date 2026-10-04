@@ -1,11 +1,11 @@
-// The intro: a desk in a quiet room, nothing on it but the MacBook. It opens, the screen lights up with the
-// miniature phone wall, and the camera dives into it, which is where the page cuts to the real wall.
+// The intro, shot like a product film: one pool of light on a solid oak desk, the MacBook in it, darkness around,
+// and far behind, out of focus, the phone wall glowing (screens and status LEDs as bokeh). The lid opens, the screen
+// lights up with a miniature of that wall, and the camera dives into it, which is where the page cuts to the real wall.
 // The whole desk rides with the camera; a virtual camera path inside desk space frames each shot.
 // Units: 1 = 10 cm. The viewer sits in front of the desk, looking toward -z.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { slab } from './shapes.js';
 
 const clamp01 = v => v<0 ? 0 : v>1 ? 1 : v;
 const smooth = (a,b,t) => { t = clamp01((t-a)/(b-a)); return t*t*(3-2*t); };
@@ -58,21 +58,6 @@ function oakTexture(){
   return t;
 }
 
-// dark low-pile office carpet: dense fine fibre noise with a faint tufting grid
-function carpetTexture(){
-  const n = 512, c = document.createElement('canvas'); c.width = c.height = n;
-  const g = c.getContext('2d'), img = g.createImageData(n, n), d = img.data;
-  let sd = 5; const r = () => (sd = (sd*16807) % 2147483647) / 2147483647;
-  for (let y=0;y<n;y++) for (let x=0;x<n;x++){
-    const tuft = ((x % 4) < 2) !== ((y % 4) < 2) ? 4 : -4;
-    const v = 46 + tuft + (r() - .5)*26 + (r() > .985 ? 22 : 0);
-    const i = (y*n + x)*4; d[i] = v; d[i+1] = v + 1; d[i+2] = v + 4; d[i+3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(70, 45); t.anisotropy = 8;
-  return t;
-}
-
 // a block with 45° chamfers on every edge (straight bevel, one segment)
 function chamferedBox(w, h, d, ch){
   const shp = new THREE.Shape(); const x = w/2 - ch, y = h/2 - ch;
@@ -86,53 +71,76 @@ export function createDesk({ envTex, nameTex, stacked }){
   const root = new THREE.Group(); root.matrixAutoUpdate = false;
   const scene = new THREE.Group(); root.add(scene);
 
-  // ---------- room ----------
-  // like the office: white walls, dark low-pile carpet. Room materials skip the scene fog (it is tuned for the wall
-  // of phones and would tint them blue/purple here).
-  const wallM = new THREE.MeshStandardMaterial({color:0xeeece8, roughness:.92, fog:false});
-  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(60, 26), wallM); backWall.position.set(0, 5, -5.2); scene.add(backWall);
-  const carpet = carpetTexture();
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), new THREE.MeshStandardMaterial({map:carpet, bumpMap:carpet, bumpScale:.6, roughness:1, fog:false}));
-  floor.rotation.x = -Math.PI/2; floor.position.set(0, -7.4, 10); scene.add(floor);
-
-  // ---------- desk: 4 cm solid oak top with chamfered edges, on a black steel sit-stand frame ----------
+  // ---------- desk: 4 cm solid oak top with chamfered edges; everything below the top stays in the dark ----------
   const oak = oakTexture(); oak.repeat.set(1/17, 1/7.4);
-  const deskTopM = new THREE.MeshPhysicalMaterial({map:oak, roughness:.58, metalness:0, clearcoat:.08, clearcoatRoughness:.6, envMap:envTex, envMapIntensity:.2, fog:false});
+  const deskTopM = new THREE.MeshStandardMaterial({map:oak, roughness:.74, metalness:0, envMap:envTex, envMapIntensity:.1, fog:false}); // oiled oak: satin, no grazing-angle mirror
   const deskTop = new THREE.Mesh(chamferedBox(17, 7.4, .4, .06), deskTopM);
   deskTop.rotation.x = -Math.PI/2; deskTop.position.set(0, -.2, 0); scene.add(deskTop);
-  const steelM = new THREE.MeshStandardMaterial({color:0x1d1e22, metalness:.55, roughness:.48, envMap:envTex, envMapIntensity:.25, fog:false});
-  const FLOOR_Y = -7.4;
-  function leg(x){
-    const l = new THREE.Group(); l.position.x = x; scene.add(l);
-    // foot: a flat bar along the depth with rounded ends and two levelling pads
-    const foot = new THREE.Mesh(slab(5.8, .8, .3, .4, .03), [steelM, steelM]); foot.rotation.x = -Math.PI/2; foot.rotation.z = Math.PI/2; foot.position.set(0, FLOOR_Y + .19, .2); l.add(foot);
-    [-2.5, 2.5].forEach(z => { const pad = new THREE.Mesh(new THREE.CylinderGeometry(.14, .16, .06, 20), steelM); pad.position.set(0, FLOOR_Y + .03, .2 + z); l.add(pad); });
-    // two-stage column: the lower stage is a touch wider, with a visible seam where the upper one slides in
-    // columns stand upright: shape w × h in the XY plane, extruded along z = depth
-    const lower = new THREE.Mesh(chamferedBox(.9, 3.5, .7, .025), steelM); lower.position.set(0, FLOOR_Y + .34 + 1.75, .1); l.add(lower);
-    const upper = new THREE.Mesh(chamferedBox(.78, 3.3, .58, .02), steelM); upper.position.set(0, -.52 - 1.65, .1); l.add(upper);
-    // top bracket under the desktop
-    const bracket = new THREE.Mesh(chamferedBox(1.1, 5.4, .12, .015), steelM); bracket.rotation.x = -Math.PI/2; bracket.position.set(0, -.46, .1); l.add(bracket);
-  }
-  leg(-6.9); leg(6.9);
-  const rail = new THREE.Mesh(chamferedBox(12.6, .5, .24, .02), steelM); rail.position.set(0, -.6, -1.4); scene.add(rail);
-  const motorBox = new THREE.Mesh(chamferedBox(2.2, .5, .8, .03), steelM); motorBox.position.set(0, -.68, -.3); scene.add(motorBox);
 
-  // skirting board where the wall meets the floor, and a soft contact shadow along it
-  const skirt = new THREE.Mesh(new THREE.BoxGeometry(60, .9, .16), new THREE.MeshStandardMaterial({color:0xf2f0ec, roughness:.55, fog:false}));
-  skirt.position.set(0, FLOOR_Y + .45, -5.12); scene.add(skirt);
-  const shadowTex = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 128; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 4, 128); return new THREE.CanvasTexture(c); })();
-  const contact = new THREE.Mesh(new THREE.PlaneGeometry(60, 2.2), new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false, fog:false}));
-  contact.rotation.x = -Math.PI/2; contact.position.set(0, FLOOR_Y + .003, -5.2 + 1.1 + .08); scene.add(contact);
+  // soft contact shadow under the MacBook (no shadow maps needed)
+  const contactTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(128, 128, 30, 128, 128, 128); gr.addColorStop(0, 'rgba(0,0,0,.85)'); gr.addColorStop(.55, 'rgba(0,0,0,.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
+  const contact = new THREE.Mesh(new THREE.PlaneGeometry(4.1, 3.1), new THREE.MeshBasicMaterial({map:contactTex, transparent:true, depthWrite:false, fog:false}));
+  contact.rotation.x = -Math.PI/2; contact.rotation.z = .06; contact.position.set(.5, .004, 1.3); scene.add(contact);
 
-  // ---------- lighting rig: a window-like key, soft fill, and the MacBook screen itself once it's on ----------
-  const key = new THREE.DirectionalLight(0xffffff, 0); key.position.set(-6, 9, 7); key.target.position.set(.5, 0, 1); scene.add(key, key.target);
-  const fill = new THREE.HemisphereLight(0x8d8f93, 0x2a2a2c, 0); scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffd6a8, 0); rim.position.set(6, 4, -6); rim.target.position.set(.5, 0, 1); scene.add(rim, rim.target);
+  // ---------- the phone wall far behind, out of focus: soft discs for screens, small hot ones for status LEDs ----------
+  const BOKEH = (() => {
+    const pos = [], col = [], size = [], seed = [];
+    let sd = 41; const r = () => (sd = (sd*16807) % 2147483647) / 2147483647;
+    const C = 30, R = 12, ARC = 40;
+    for (let row=0; row<R; row++) for (let c=0; c<C; c++){
+      const u = (c - (C-1)/2)*2.3, th = u/ARC;
+      const x = ARC*Math.sin(th) + (r()-.5)*.5, z = -60 + ARC*(1-Math.cos(th)), y = -9 + row*3.1 + (r()-.5)*.5;
+      const lit = r();
+      if (lit > .45){ // a screen
+        const k = .5 + r()*.5; pos.push(x, y, z); col.push(.55*k, .62*k, .85*k); size.push(1.5 + r()*.8); seed.push(r());
+      }
+      // its status LED, just below the screen
+      const led = r() > .14 ? [.25, 1.0, .5] : [1.0, .62, .2];
+      if (r() > .35){ pos.push(x + .35, y - 1.5, z + .1); col.push(...led); size.push(.5 + r()*.2); seed.push(r() + 1); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('aSize', new THREE.Float32BufferAttribute(size, 1));
+    g.setAttribute('aSeed', new THREE.Float32BufferAttribute(seed, 1));
+    return g;
+  })();
+  const bokehU = { uScale:{value:600}, uTime:{value:0}, uOn:{value:0} };
+  const bokeh = new THREE.Points(BOKEH, new THREE.ShaderMaterial({
+    uniforms: bokehU, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`
+      attribute float aSize, aSeed; attribute vec3 color; uniform float uScale, uTime; varying vec3 vCol; varying float vTw, vLed;
+      void main(){
+        vec4 mv = modelViewMatrix*vec4(position, 1.0);
+        gl_PointSize = aSize*uScale/max(.1, -mv.z);
+        vLed = step(1.0, aSeed);
+        // screens breathe slowly, LEDs blink now and then
+        float s = fract(aSeed);
+        vTw = vLed > .5 ? (.55 + .45*step(.25, fract(uTime*.35 + s*7.0))) : (.8 + .2*sin(uTime*.6 + s*40.0));
+        vCol = color;
+        gl_Position = projectionMatrix*mv;
+      }`,
+    fragmentShader:`
+      uniform float uOn; varying vec3 vCol; varying float vTw, vLed;
+      void main(){
+        float r = length(gl_PointCoord - .5)*2.0;
+        if (r > 1.0) discard;
+        // a lens bokeh disc: flat body, slightly brighter rim
+        float body = smoothstep(1.0, .9, r), rim = smoothstep(.97, .9, r) - smoothstep(.9, .78, r);
+        float a = (body*(vLed > .5 ? .45 : .17) + rim*.1)*vTw*uOn;
+        gl_FragColor = vec4(vCol*a, a);
+      }`
+  }));
+  bokeh.renderOrder = -1; scene.add(bokeh);
+
+  // ---------- light: one soft pool from above, a cool edge light from behind, the screen itself once it's on ----------
+  const pool = new THREE.SpotLight(0xfff0dc, 0, 26, .42, 1, 1.6); pool.position.set(1.2, 10, 2.2); pool.target.position.set(.4, 0, 1.0); scene.add(pool, pool.target);
+  const edge = new THREE.DirectionalLight(0xbfd0ff, 0); edge.position.set(-3, 7, -6); edge.target.position.set(.5, 0, 1); scene.add(edge, edge.target);
+  const fill = new THREE.HemisphereLight(0x3a3f4a, 0x000000, 0); scene.add(fill);
   const glow = new THREE.PointLight(0x9fb4ff, 0, 7, 2); glow.position.set(.5, 1.4, .9); scene.add(glow);
-  // a ceiling lamp over the desk: a pool of light on the top and the wall behind, so the room has depth at night
-  const lamp = new THREE.PointLight(0xfff4e6, 0, 60, 2); lamp.position.set(1.2, 12, 1.5); scene.add(lamp);
-  const KEY_DAY = new THREE.Color(0xfff1dc), KEY_NIGHT = new THREE.Color(0xe9e7e2), KEY_GOLD = new THREE.Color(0xffb070);
+  const POOL_NIGHT = new THREE.Color(0xfff0dc), POOL_DAY = new THREE.Color(0xfff6ea), POOL_GOLD = new THREE.Color(0xffc489);
   let day = 0, gold = 0;
 
   // ---------- the MacBook screen: a miniature of the phone wall, same grid and name, so the cut lines up ----------
@@ -198,11 +206,13 @@ export function createDesk({ envTex, nameTex, stacked }){
   // Shot A frames the whole desk with the MacBook right of the copy column; B hangs over the open MacBook.
   // From B the camera first swings onto the screen's own axis (AXIS_FAR, straight out from the screen centre,
   // rolled level with the screen), then travels down that axis into the screen. No zooming in from an angle.
+  // A: low over the desk, the oak running away in the foreground, the MacBook a dark silhouette against the bokeh.
   const shots = () => stacked() ? {
-    A: [new THREE.Vector3(1.0, 6.5, 26), new THREE.Vector3(.4, -2.8, 0)],
-    B: [new THREE.Vector3(.9, 3.4, 6.4), new THREE.Vector3(.5, .5, 1.0)]
+    A: [new THREE.Vector3(1.6, 1.5, 13.5), new THREE.Vector3(.5, -.9, .6)],
+    // phones: the copy covers the lower half, so the camera aims below the MacBook to lift it into the top half
+    B: [new THREE.Vector3(.9, 4.4, 10.5), new THREE.Vector3(.5, -1.2, 1.3)]
   } : {
-    A: [new THREE.Vector3(3.6, 5.2, 21), new THREE.Vector3(-4.6, -2.6, 0)],
+    A: [new THREE.Vector3(3.9, .72, 6.4), new THREE.Vector3(-.9, .35, .3)],
     B: [new THREE.Vector3(1.7, 2.6, 5.4), new THREE.Vector3(.4, .8, 1.0)]
   };
   const SCREEN_U = new THREE.Vector3(0, .926, -.376).applyAxisAngle(Y, mac.rotation.y);
@@ -215,13 +225,15 @@ export function createDesk({ envTex, nameTex, stacked }){
     if (!root.visible) return;
     if (powerT === null) powerT = now;
     const p = reduced ? 9 : (now - powerT)/1000;
-    // the room fades up from black over the first second
-    const on = smooth(.1, 1.1, p);
-    key.color.copy(KEY_NIGHT).lerp(KEY_DAY, day).lerp(KEY_GOLD, gold*.7);
-    key.intensity = on*lerp(2.2, 4.2, day) + on*gold*1.2;
-    fill.intensity = on*lerp(1.0, 1.6, day);
-    rim.intensity = on*lerp(1.1, .4, day);
-    lamp.intensity = on*lerp(120, 50, day);
+    // the light comes up from black over the first second and a half, the far wall fades in a beat later
+    const on = smooth(.1, 1.5, p);
+    pool.color.copy(POOL_NIGHT).lerp(POOL_DAY, day).lerp(POOL_GOLD, gold*.6);
+    pool.intensity = on*lerp(42, 34, day);
+    edge.intensity = on*lerp(.9, .6, day);
+    fill.intensity = on*lerp(.25, .5, day);
+    bokehU.uOn.value = smooth(.6, 2.2, p)*(1 - smooth(.6, .85, st));
+    bokehU.uTime.value = now/1000;
+    bokehU.uScale.value = innerHeight*Math.min(2, devicePixelRatio || 1)/(2*Math.tan(20*Math.PI/180));
 
     // the MacBook opens, wakes up, keyboard backlight glows, the screen lights the desk
     const open = easeIO(smooth(.24, .52, st));
