@@ -4,6 +4,9 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { rrShape, slab, flat, faceBack } from './shapes.js';
+import { createDesk } from './desk.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import './style.css';
 
@@ -46,7 +49,7 @@ const wall = new THREE.Group(); scene.add(wall);
 const land = innerWidth >= innerHeight;
 const C = land ? 26 : 12, R = land ? 10 : 14, COUNT = C*R;
 const SX = 1.06, SY = 2.06, ARC = land ? 26 : 30;
-const BW = .94, BH = 1.94, BD = .09, SW = .86, SH = 1.80;
+const BW = .94, BH = 1.94, BD = .085, SW = .885, SH = 1.885;
 
 let seed = 11;
 const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -95,7 +98,10 @@ function wallPoint(u, v, out){
 }
 
 // ---------- wall geometry ----------
-const bodies = new THREE.InstancedMesh(new THREE.BoxGeometry(BW,BH,BD), new THREE.MeshStandardMaterial({color:0x0c0e13, metalness:.62, roughness:.36}), COUNT);
+// each slot is a phone: rounded glass slab with a metal rail, a notched screen and a USB-C cable running back into the rack
+const wallGlass = new THREE.MeshPhysicalMaterial({color:0x040507, roughness:.14, metalness:0, clearcoat:1, clearcoatRoughness:.08, envMap:envTex, envMapIntensity:.32});
+const wallRail = new THREE.MeshStandardMaterial({color:0x3b3f47, metalness:.9, roughness:.38, envMap:envTex, envMapIntensity:.3});
+const bodies = new THREE.InstancedMesh(slab(BW,BH,BD,.135,.022), [wallGlass, wallRail], COUNT);
 const screenGeo = new THREE.PlaneGeometry(SW,SH);
 const aCell = new Float32Array(COUNT*2), aId = new Float32Array(COUNT), aType = new Float32Array(COUNT), aSeed = new Float32Array(COUNT), aDelay = new Float32Array(COUNT);
 for (let i=0;i<COUNT;i++){
@@ -130,7 +136,7 @@ const screenMat = new THREE.ShaderMaterial({
     uniform float uTime, uWall, uImg, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim;
     uniform vec2 uGrid; uniform sampler2D uName, uFace; uniform vec3 uRoom;
     varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth;
-    const float ASP = 2.093;
+    const float ASP = ${(SH/SW).toFixed(4)};
     float hash(float n){ return fract(sin(n*12.9898+4.1414)*43758.5453); }
     float sdBox(vec2 p, vec2 b, float r){ vec2 q=abs(p)-b+r; return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r; }
     float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0); return length(pa-ba*h); }
@@ -256,7 +262,46 @@ const screenMat = new THREE.ShaderMaterial({
       return c;
     }
 
+    // WhatsApp, dark mode: header with the contact, green/grey bubbles drifting up, input bar with the mic button
+    vec3 whatsapp(vec2 q, float t, float s){
+      vec3 col = vec3(.043,.078,.102);
+      vec2 dg = fract(q*9.0) - .5;
+      float dn = hash(floor(q.x*9.0) + floor(q.y*9.0)*17.0 + s*3.0);
+      col += vec3(.018,.026,.03)*fillD(abs(length(dg)-.22)-.018, .03)*step(.55, dn);
+      float hy0 = ASP-.34;
+      float off = fract(t*.16+s)*.4;
+      for (int i=0;i<7;i++){
+        float fi = float(i);
+        float y = .3 + fi*.4 - off;
+        float mine = mod(fi + floor(s*2.0), 2.0);
+        float w = .2 + .2*hash(fi + s*13.0);
+        float h = .062 + .05*step(.5, hash(fi*3.1+s));
+        vec2 cp = vec2(mine > .5 ? .93-w : .07+w, y);
+        float vis = smoothstep(.2, .26, y-h)*(1.0-smoothstep(hy0-.06, hy0-.01, y+h));
+        vec3 bc = mine > .5 ? vec3(0.0,.361,.294) : vec3(.125,.173,.2);
+        col = mix(col, bc, fillD(sdBox(q-cp, vec2(w, h), .045), .008)*vis);
+        float tl = fillD(sdBox(q-cp-vec2(-w*.1, h*.32), vec2(w*.76, .011), .006), .006)
+                 + fillD(sdBox(q-cp-vec2(-w*.3, -h*.22), vec2(w*.52, .011), .006), .006)*step(.09, h);
+        col = mix(col, vec3(.8,.85,.83), clamp(tl,0.0,1.0)*vis);
+        col = mix(col, vec3(.33,.72,.93), fillD(sdBox(q-cp-vec2(w*.74, -h*.66), vec2(.028,.007), .004), .006)*vis*mine);
+      }
+      col = mix(col, vec3(.122,.173,.204), step(hy0, q.y));
+      col = mix(col, vec3(.42,.47,.5), fillD(length(q-vec2(.16, hy0+.1))-.058, .01));
+      col = mix(col, vec3(.86,.89,.9), fillD(sdBox(q-vec2(.42, hy0+.12), vec2(.15,.018), .01), .008));
+      col = mix(col, vec3(.45,.52,.55), fillD(sdBox(q-vec2(.36, hy0+.068), vec2(.09,.011), .006), .008));
+      col = mix(col, vec3(.043,.078,.102), step(q.y, .2));
+      col = mix(col, vec3(.165,.224,.259), fillD(sdBox(q-vec2(.42,.11), vec2(.35,.055), .055), .008));
+      col = mix(col, vec3(0.0,.659,.518), fillD(length(q-vec2(.88,.11))-.058, .008));
+      col = mix(col, vec3(.92), fillD(sdBox(q-vec2(.84,ASP-.07),vec2(.07,.018),.008),.01)*.8);
+      col = mix(col, vec3(.92), fillD(sdBox(q-vec2(.16,ASP-.07),vec2(.05,.012),.006),.01)*.8);
+      return col;
+    }
+
     void main(){
+      // rounded display corners: outside them the black glass of the body shows through
+      vec2 pp = (vUv - .5)*vec2(${SW.toFixed(3)}, ${SH.toFixed(3)});
+      float dEdge = sdBox(pp, vec2(${(SW/2).toFixed(4)}, ${(SH/2).toFixed(4)}), .108);
+      if (dEdge > 0.0) discard;
       vec2 q = vec2(vUv.x, vUv.y*ASP);
       float t = uTime + vSeed*30.0;
       float typ = vDelay < uSweep ? uTo : uFrom;
@@ -272,18 +317,20 @@ const screenMat = new THREE.ShaderMaterial({
       img *= .74 + .26*step(.18,pg.x)*step(.18,pg.y);
       float glitch = step(.985, hash(vId*.37 + floor(uTime*3.0)));
       float wm = smoothstep(vDelay, vDelay+.2, uWall*1.25) * (1.0 - glitch*.85*step(.99,uWall));
-      float b = mix(a*mix(1.0,.55,uWall), img*1.05, wm);
 
       vec3 bg = vec3(.028,.036,.058);
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
-      vec3 col = bg + (ink-bg)*b;
+      vec3 ac = (typ > 2.5 && typ < 3.5) ? whatsapp(q, t, vSeed) : bg + (ink-bg)*a;
+      vec3 col = mix(ac*mix(1.0,.55,uWall), bg + (ink-bg)*img*1.05, wm);
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
-      vec2 e = min(vUv, 1.0-vUv); col *= smoothstep(0.0,.04,e.x)*smoothstep(0.0,.02,e.y)*.25+.75;
+      col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
       if (abs(vId-uHover) < .5) col = col*1.45 + vec3(.06,.035,0.0);
+      float isl = sdBox(pp - vec2(0.0, ${(SH/2-.074).toFixed(4)}), vec2(.128, .035), .035);
+      col *= smoothstep(0.0, .007, isl);
       float on = step(vSeed, uBoot);
       float flash = on*(1.0-smoothstep(0.0,.06,uBoot-vSeed));
       col = mix(bg*.35, col, on) + vec3(.6,.65,.75)*flash;
-      col *= mix(1.0, .28, uDim);
+      col *= mix(1.0, .42, uDim);
       // the screens are authored in display space; the composer works in linear light
       col = pow(max(col, vec3(0.0)), vec3(2.2)) * uGain;
       col = mix(col, uRoom, smoothstep(34.0, 72.0, vDepth));
@@ -293,9 +340,14 @@ const screenMat = new THREE.ShaderMaterial({
 const screens = new THREE.InstancedMesh(screenGeo, screenMat, COUNT);
 const shelves = new THREE.InstancedMesh(new THREE.BoxGeometry(SX*.98, .05, .42), new THREE.MeshStandardMaterial({color:0x14161c, metalness:.7, roughness:.45}), COUNT);
 const leds = new THREE.InstancedMesh(new THREE.BoxGeometry(.06,.035,.02), new THREE.MeshBasicMaterial(), COUNT);
+const cablePath = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0,-BH/2+.02,-.012), new THREE.Vector3(0,-BH/2-.022,-.014), new THREE.Vector3(.012,-BH/2-.03,-.08),
+  new THREE.Vector3(.03,-BH/2-.03,-.22), new THREE.Vector3(.055,-BH/2-.03,-.38)]);
+const plug = new THREE.BoxGeometry(.07,.046,.034); plug.translate(0,-BH/2-.008,-.012);
+const cables = new THREE.InstancedMesh(mergeGeometries([new THREE.TubeGeometry(cablePath, 20, .013, 6, false), plug]), new THREE.MeshStandardMaterial({color:0xd6d6d1, roughness:.48, metalness:0, envMap:envTex, envMapIntensity:.25}), COUNT);
 const AMBER = new THREE.Color('#ffb547').multiplyScalar(2.2);
 const LEDOFF = new THREE.Color(0x2a2418), LEDGREEN = new THREE.Color(0x58ff9a).multiplyScalar(1.3);
-wall.add(bodies, screens, shelves, leds);
+wall.add(bodies, screens, shelves, leds, cables);
 
 const lift = new Float32Array(COUNT);
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3();
@@ -305,7 +357,7 @@ function place(i){
   N.set(Math.sin(b.ry),0,Math.cos(b.ry));
   const k = 1 + l*.08;
   tmpP.set(b.x,b.y,b.z).addScaledVector(N, l*.9); tmpS.set(k,k,k);
-  tmpM.compose(tmpP,tmpQ,tmpS); bodies.setMatrixAt(i,tmpM);
+  tmpM.compose(tmpP,tmpQ,tmpS); bodies.setMatrixAt(i,tmpM); cables.setMatrixAt(i,tmpM);
   tmpP.addScaledVector(N, BD/2+.002); tmpM.compose(tmpP,tmpQ,tmpS); screens.setMatrixAt(i,tmpM);
 }
 for (let i=0;i<COUNT;i++){
@@ -315,7 +367,7 @@ for (let i=0;i<COUNT;i++){
   tmpP.addScaledVector(N,.215); tmpP.x += Math.cos(b.ry)*.36; tmpP.z -= Math.sin(b.ry)*.36; tmpM.compose(tmpP,tmpQ,tmpS); leds.setMatrixAt(i,tmpM);
   leds.setColorAt(i, rnd()>.12 ? LEDGREEN : AMBER);
 }
-[bodies,screens,shelves,leds].forEach(m=>{ m.instanceMatrix.needsUpdate=true; });
+[bodies,screens,shelves,leds,cables].forEach(m=>{ m.instanceMatrix.needsUpdate=true; });
 leds.instanceColor.needsUpdate = true;
 
 // =====================================================================
@@ -325,25 +377,6 @@ leds.instanceColor.needsUpdate = true;
 const stage = new THREE.Group(); camera.add(stage);
 const pKey = new THREE.DirectionalLight(0xffffff, 1.0); pKey.position.set(-2.5,3,3); camera.add(pKey); pKey.target = stage;
 
-function rrShape(w,h,r){
-  const s = new THREE.Shape(), x=w/2, y=h/2; r = Math.min(r,x,y);
-  s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.absarc(x-r,-y+r,r,-Math.PI/2,0,false);
-  s.lineTo(x,y-r); s.absarc(x-r,y-r,r,0,Math.PI/2,false);
-  s.lineTo(-x+r,y); s.absarc(-x+r,y-r,r,Math.PI/2,Math.PI,false);
-  s.lineTo(-x,-y+r); s.absarc(-x+r,-y+r,r,Math.PI,Math.PI*1.5,false);
-  return s;
-}
-// rounded slab centred on the origin, caps facing ±z (material group 0 = caps, 1 = sides)
-function slab(w,h,d,r,b){
-  const g = new THREE.ExtrudeGeometry(rrShape(w-2*b,h-2*b,Math.max(.002,r-b)), {depth:Math.max(.001,d-2*b), bevelEnabled:true, bevelThickness:b, bevelSize:b, bevelSegments:6, curveSegments:28});
-  g.translate(0,0,-(d-2*b)/2); return g;
-}
-function flat(w,h,r){
-  const g = new THREE.ShapeGeometry(rrShape(w,h,r), 28), p = g.attributes.position, uv = g.attributes.uv;
-  for (let i=0;i<p.count;i++) uv.setXY(i, p.getX(i)/w+.5, p.getY(i)/h+.5);
-  return g;
-}
-const faceBack = m => { m.rotation.y = Math.PI; return m; };
 
 // ---------- phone ("iPhone 18 Pro Max"-ish, deep blue aluminium) ----------
 const PW=.78, PH=1.63, PD=.083;
@@ -736,6 +769,11 @@ function placeStage(){
   else { stage.position.set(halfW*.34, -.04, -d); stage.scale.setScalar(1); }
 }
 
+// ---------- intro desk (rides with the camera, like the stage) ----------
+const desk = createDesk({envTex, nameTex, photo:null, stacked:isStacked});
+camera.add(desk.root);
+const flashEl = document.getElementById('flash');
+
 // ---------- post ----------
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -844,6 +882,7 @@ const sPhones = document.getElementById('sPhones'), sTaps = document.getElementB
 document.getElementById('hDev').textContent = COUNT;
 
 // ---------- loop ----------
+let storyNow = 0;
 let sy = scrollY, last = performance.now(), boot = reduced ? 1.1 : 0, hudT = 0, ledT = 0, jobs = COUNT-3, phones = 512;
 const camPos = new THREE.Vector3(), camTgt = new THREE.Vector3(), corner = new THREE.Vector3();
 const CORNERS = [[-BW/2,-BH/2],[BW/2,-BH/2],[BW/2,BH/2],[-BW/2,BH/2]];
@@ -851,10 +890,12 @@ const CORNERS = [[-BW/2,-BH/2],[BW/2,-BH/2],[BW/2,BH/2],[-BW/2,BH/2]];
 function frame(now){
   const dt = Math.min(.05,(now-last)/1000); last = now;
   if (!reduced) uniforms.uTime.value += dt;
-  boot = Math.min(1.1, boot + dt*.55); uniforms.uBoot.value = boot;
+  // the wall powers up right after the dive out of the MacBook
+  boot = storyNow < .97 && !reduced ? 0 : Math.min(1.1, boot + dt*.8); uniforms.uBoot.value = boot;
 
   // clock + light
   clock.live = pragueHours();
+  storyNow = storyAt(sy).st;
   const want = clock.preview ?? clock.live;
   const dh = ((want - clock.shown + 36) % 24) - 12;
   clock.shown = (clock.shown + (Math.abs(dh) < .01 ? dh : dh*(reduced?1:.05)) + 24) % 24;
@@ -862,7 +903,9 @@ function frame(now){
 
   sy += (scrollY - sy)*(reduced ? 1 : .085);
   const {prog, st} = storyAt(sy);
-  let a = Math.floor(prog), f = prog-a; if (a>=S-1){ a=S-2; f=1; }
+  // chapter 0 is the desk; the wall's own chapters start at 1
+  const wp = Math.max(0, prog-1);
+  let a = Math.floor(wp), f = wp-a; if (a>=S-1){ a=S-2; f=1; }
   const loc = smooth(.18,.86,f);
 
   // camera
@@ -882,7 +925,12 @@ function frame(now){
   else if (a===S-2){ U.uWall.value = loc; U.uImg.value=1; U.uFrom.value=types[a]; U.uTo.value=types[a]; U.uSweep.value=0; }
   else { U.uWall.value=0; U.uImg.value=1; U.uFrom.value=types[a]; U.uTo.value=types[a+1]; U.uSweep.value=loc*1.05; }
 
-  updateStage(st, now);
+  const deskP = 1 - smooth(.97, 1.03, st);
+  wall.visible = deskP < .999;
+  amb.intensity *= 1 - .7*deskP; key.intensity *= 1 - .6*deskP;
+  desk.update(st, now, {x:pmx*pm, y:pmy*pm}, reduced);
+  flashEl.style.opacity = (smooth(.9, 1.0, st)*(1 - smooth(1.0, 1.14, st))*.9).toFixed(3);
+  updateStage(st - 2, now);
 
   // hover via raycast (off while the stage owns the frame)
   let h = -1;
@@ -895,7 +943,7 @@ function frame(now){
   hover = h; U.uHover.value = h;
   for (let i=0;i<COUNT;i++){
     const tg = (i===hover && !reduced) ? 1 : 0;
-    if (Math.abs(lift[i]-tg) > .002){ lift[i] += (tg-lift[i])*.18; place(i); bodies.instanceMatrix.needsUpdate = true; screens.instanceMatrix.needsUpdate = true; }
+    if (Math.abs(lift[i]-tg) > .002){ lift[i] += (tg-lift[i])*.18; place(i); bodies.instanceMatrix.needsUpdate = true; screens.instanceMatrix.needsUpdate = true; cables.instanceMatrix.needsUpdate = true; }
   }
 
   composer.render();
@@ -943,7 +991,7 @@ function frame(now){
     sPhones.textContent = phones;
     hTime.textContent = hhmm(clock.preview ?? clock.live);
     hShift.textContent = clock.preview === null ? shiftName(clock.live) : 'Preview · ' + shiftName(clock.preview);
-    const on = Math.round(prog); navLinks.forEach((l,i)=>l.classList.toggle('on', i===on));
+    const on = Math.max(Math.round(prog), 1) === 1 ? 0 : Math.round(prog); navLinks.forEach(l=>l.classList.toggle('on', +l.dataset.i===on));
   }
   requestAnimationFrame(frame);
 }
@@ -951,8 +999,21 @@ function frame(now){
 const img = new Image();
 img.onload = () => paintFace(img);
 img.src = GROUP_IMG;
+const me = new Image();
+me.onload = () => desk.setPhoto(me);
+me.src = '/petr.png';
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"'].map(f => document.fonts.load(f))).catch(()=>{})
   : Promise.resolve();
-const start = () => { paintName(); drawNotif(); measure(); requestAnimationFrame(frame); };
+// debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
+const SHOT = /shot=([\d.]+)/.exec(location.hash);
+function scrollForSt(st){
+  const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
+  return into <= 1 ? tops[i] + into*hold : tops[i] + hold + (into-1)*innerHeight;
+}
+const start = () => {
+  paintName(); drawNotif(); measure();
+  if (SHOT){ scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
+  requestAnimationFrame(frame);
+};
 fontsReady.then(start, start);
