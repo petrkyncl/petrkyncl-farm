@@ -254,8 +254,8 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
   // The model ships with the lid open at ~112°. Its lid parts get re-parented under a pivot on the hinge line
   // (model space y 0, z -0.108 m) so the lid can close and open; its screen gets the miniature phone wall.
   const LID_PARTS = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC',
-    'xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl'];
-  const LID_SHUT = 1.955, Y = new THREE.Vector3(0, 1, 0);
+    'xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl','WyuoVWKMOcOlXJM'];
+  const LID_SHUT = 1.925, Y = new THREE.Vector3(0, 1, 0); // found by eye in /mac-lab.html: flat on the deck, no intersection
   let macPivot = null;
   const mac = new THREE.Group(); mac.position.set(.5, .09, 1.3); mac.rotation.y = -.06;
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
@@ -265,7 +265,14 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
     scene.add(mac); mac.updateMatrixWorld(true);
     const lid = []; model.traverse(o => { if (o.isMesh && LID_PARTS.includes(o.name)) lid.push(o); });
     lid.forEach(o => pivot.attach(o));
-    model.traverse(o => { if (o.isMesh && 'envMap' in o.material){ o.material.envMap = envTex; o.material.needsUpdate = true; } });
+    // Space Black is dark: keep the studio environment's reflections low, and the logo glossy rather than a mirror
+    model.traverse(o => {
+      if (!o.isMesh || !('envMap' in o.material)) return;
+      const m = o.material; m.envMap = envTex; m.envMapIntensity = .35;
+      if (m.name === 'zNRfbdNyoCOxSDD') m.color.setHex(0x3e3d40);
+      if (m.name === 'pKaDkdyuuvylYHt'){ m.roughness = .22; m.envMapIntensity = .25; m.color.setHex(0x1c1c1e); }
+      m.needsUpdate = true;
+    });
     const screen = lid.find(o => o.name === 'tfTbkkzhxqpKRgC');
     if (screen){ screen.material = mbScreen.material; mbUniforms.uFlip.value.set(0, 1); } // the model's screen UVs run bottom-up
     MB.visible = false; macPivot = pivot;

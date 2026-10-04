@@ -13,12 +13,24 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1a1b1f);
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
 const cam = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, .01, 10);
-const P = { front:[0,.22,.75], side:[.8,.15,0], top:[0,.9,.05], back:[0,.25,-.8], quarter:[.5,.35,.55] }[view] || [0,.22,.75];
-cam.position.set(...P); cam.lookAt(0, .07, -.04);
+const P = { front:[0,.22,.75], side:[.8,.15,0], top:[0,.9,.05], back:[0,.25,-.8], quarter:[.5,.35,.55], hinge:[.42,.02,-.11], lowside:[.6,.012,.0] }[view] || [0,.22,.75];
+cam.position.set(...P); if (view==='hinge') cam.lookAt(.12, .004, -.1); else if (view==='lowside') cam.lookAt(0,.004,0); else cam.lookAt(0, .07, -.04);
+if (view==='hinge'||view==='lowside'){ cam.fov = view==='hinge' ? 8 : 12; cam.updateProjectionMatrix(); }
 
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
 const gltf = await loader.loadAsync('/models/macbook-pro-14-m5.glb');
 scene.add(gltf.scene); scene.updateMatrixWorld(true);
+// optional hinge test: ?lid=<radians>&py=<pivot y>&pz=<pivot z>
+const qs = new URLSearchParams(location.search);
+if (qs.has('lid')){
+  const LID_PARTS = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC','xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl'];
+  const pivot = new THREE.Group(); pivot.position.set(0, +(qs.get('py') ?? 0), +(qs.get('pz') ?? -.108)); gltf.scene.add(pivot); gltf.scene.updateMatrixWorld(true);
+  const extra = (qs.get('extra') || '').split(',').filter(Boolean);
+  const lid = []; gltf.scene.traverse(o => { if (o.isMesh && (LID_PARTS.includes(o.name) || extra.includes(o.name))) lid.push(o); });
+  lid.forEach(o => pivot.attach(o));
+  pivot.rotation.x = +qs.get('lid'); scene.updateMatrixWorld(true);
+  const b = new THREE.Box3(); lid.forEach(o => b.expandByObject(o)); window.lidBox = [b.min.toArray(), b.max.toArray()];
+}
 const rows = [];
 gltf.scene.traverse(o => {
   if (!o.isMesh) return;
