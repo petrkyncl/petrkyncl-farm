@@ -4,6 +4,8 @@
 // Units: 1 = 10 cm. The viewer sits in front of the desk, looking toward -z.
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { rrShape, slab, flat, faceBack } from './shapes.js';
 
 const clamp01 = v => v<0 ? 0 : v>1 ? 1 : v;
@@ -55,7 +57,7 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
   const scene = new THREE.Group(); root.add(scene);
 
   const metalDark = new THREE.MeshStandardMaterial({color:0x2a2b2f, metalness:.88, roughness:.36, envMap:envTex, envMapIntensity:.8});
-  const metalSilver = new THREE.MeshStandardMaterial({color:0x8e9196, metalness:1, roughness:.3, envMap:envTex, envMapIntensity:.9});
+  const metalSilver = new THREE.MeshStandardMaterial({color:0x7d8086, metalness:1, roughness:.42, envMap:envTex, envMapIntensity:.55});
   const blackMatte = new THREE.MeshStandardMaterial({color:0x0e0f11, roughness:.8, metalness:.1, envMap:envTex, envMapIntensity:.3});
   const glassBlack = new THREE.MeshPhysicalMaterial({color:0x030304, roughness:.08, clearcoat:1, envMap:envTex, envMapIntensity:1});
 
@@ -70,8 +72,6 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
   const deskTop = new THREE.Mesh(slab(17, 7.4, .36, .18, .05), [deskTopM, deskTopM]);
   deskTop.rotation.x = -Math.PI/2; deskTop.position.set(0, -.18, 0); scene.add(deskTop);
   [-7.6, 7.6].forEach(x => { const leg = new THREE.Mesh(new THREE.BoxGeometry(.5, 7.2, 6.4), metalDark); leg.position.set(x, -3.95, 0); scene.add(leg); });
-  const mat = new THREE.Mesh(slab(9.5, 3.9, .03, .2, .01), [new THREE.MeshStandardMaterial({color:0x1a1b1e, roughness:.95}), blackMatte]);
-  mat.rotation.x = -Math.PI/2; mat.position.set(.4, .016, 1.25); scene.add(mat);
 
   // ---------- monitor (Pro Display XDR-ish) with the camera feed ----------
   const MON = new THREE.Group(); MON.position.set(-.4, 4.25, -2.75); scene.add(MON);
@@ -106,10 +106,10 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
   const lidSlab = new THREE.Mesh(slab(3.56, 2.48, .07, .12, .025), [metalDark, metalDark]);
   lidSlab.rotation.x = -Math.PI/2; lidSlab.position.set(0, .035, 1.24); lid.add(lidSlab);
   const bezel = new THREE.Mesh(flat(3.48, 2.4, .1), glassBlack); bezel.rotation.x = Math.PI/2; bezel.position.set(0, -.002, 1.24); lid.add(bezel);
-  const mbUniforms = { uName:{value:nameTex}, uPow:{value:0}, uTime:{value:0}, uFlash:{value:0} };
+  const mbUniforms = { uName:{value:nameTex}, uPow:{value:0}, uTime:{value:0}, uFlash:{value:0}, uFlip:{value:new THREE.Vector2(0,0)} };
   const mbScreen = new THREE.Mesh(flat(3.34, 2.17, .07), new THREE.ShaderMaterial({
     uniforms: mbUniforms,
-    vertexShader:`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    vertexShader:`uniform vec2 uFlip; varying vec2 vUv; void main(){ vUv = mix(uv, 1.0 - uv, uFlip); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
     fragmentShader:`
       uniform sampler2D uName; uniform float uPow, uTime, uFlash; varying vec2 vUv;
       void main(){
@@ -231,6 +231,7 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
     // the MacBook opens, wakes up, keyboard backlight glows
     const open = easeIO(smooth(.24, .52, st));
     hinge.rotation.x = OPEN*open;
+    if (macPivot) macPivot.rotation.x = LID_SHUT*(1 - open);
     const pw = smooth(.46, .56, st);
     mbUniforms.uPow.value = pw*(st < .56 && Math.random() > .7 ? .4 : 1);
     mbUniforms.uTime.value = now/1000;
@@ -248,6 +249,31 @@ export function createDesk({ envTex, nameTex, photo, stacked }){
     root.matrix.copy(vcam).invert();
     root.matrixWorldNeedsUpdate = true;
   }
+
+  // ---------- the real MacBook Pro 14" (M5, Space Black) replaces the hand-built one once it loads ----------
+  // The model ships with the lid open at ~112°. Its lid parts get re-parented under a pivot on the hinge line
+  // (model space y 0, z -0.108 m) so the lid can close and open; its screen gets the miniature phone wall.
+  const LID_PARTS = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC',
+    'xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl'];
+  const LID_SHUT = 1.955, Y = new THREE.Vector3(0, 1, 0);
+  let macPivot = null;
+  const mac = new THREE.Group(); mac.position.set(.5, .09, 1.3); mac.rotation.y = -.06;
+  const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.loadAsync('/models/macbook-pro-14-m5.glb').then(gltf => {
+    const model = gltf.scene; model.scale.setScalar(10); mac.add(model);
+    const pivot = new THREE.Group(); pivot.position.set(0, 0, -.108); model.add(pivot);
+    scene.add(mac); mac.updateMatrixWorld(true);
+    const lid = []; model.traverse(o => { if (o.isMesh && LID_PARTS.includes(o.name)) lid.push(o); });
+    lid.forEach(o => pivot.attach(o));
+    model.traverse(o => { if (o.isMesh && 'envMap' in o.material){ o.material.envMap = envTex; o.material.needsUpdate = true; } });
+    const screen = lid.find(o => o.name === 'tfTbkkzhxqpKRgC');
+    if (screen){ screen.material = mbScreen.material; mbUniforms.uFlip.value.set(0, 1); } // the model's screen UVs run bottom-up
+    MB.visible = false; macPivot = pivot;
+    // dive target: centre and facing of the open screen, in desk space
+    SCREEN_C.set(0, .105, -.1515).multiplyScalar(10).applyAxisAngle(Y, mac.rotation.y).add(mac.position);
+    SCREEN_N.set(0, .376, .926).applyAxisAngle(Y, mac.rotation.y);
+    C_EYE.copy(SCREEN_C).addScaledVector(SCREEN_N, .3);
+  }).catch(e => console.warn('MacBook model failed, keeping the hand-built one', e));
 
   return { root, update, setPhoto: img => { face = img; feedKey = ''; } };
 }
