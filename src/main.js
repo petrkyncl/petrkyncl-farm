@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rrShape, slab, flat, faceBack } from './shapes.js';
 import { createDesk } from './desk.js';
+import { createPhone, createCard, outlineGeometry, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import './style.css';
@@ -98,7 +99,7 @@ function wallPoint(u, v, out){
 }
 
 // ---------- wall geometry ----------
-// each slot is a phone: rounded glass slab with a metal rail, a notched screen and a USB-C cable running back into the rack
+// each slot is an Android phone: rounded glass slab, metal rail, punch-hole screen, USB-C cable running back into the rack
 const wallGlass = new THREE.MeshPhysicalMaterial({color:0x040507, roughness:.14, metalness:0, clearcoat:1, clearcoatRoughness:.08, envMap:envTex, envMapIntensity:.32});
 const wallRail = new THREE.MeshStandardMaterial({color:0x3b3f47, metalness:.9, roughness:.38, envMap:envTex, envMapIntensity:.3});
 const bodies = new THREE.InstancedMesh(slab(BW,BH,BD,.135,.022), [wallGlass, wallRail], COUNT);
@@ -325,8 +326,9 @@ const screenMat = new THREE.ShaderMaterial({
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
       col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
       if (abs(vId-uHover) < .5) col = col*1.45 + vec3(.06,.035,0.0);
-      float isl = sdBox(pp - vec2(0.0, ${(SH/2-.074).toFixed(4)}), vec2(.128, .035), .035);
-      col *= smoothstep(0.0, .007, isl);
+      // Android: punch-hole camera at the top, gesture bar at the bottom
+      col *= smoothstep(0.0, .006, length(pp - vec2(0.0, ${(SH/2-.062).toFixed(4)})) - .027);
+      col = mix(col, vec3(.78,.8,.84), fillD(sdBox(pp - vec2(0.0, ${(-SH/2+.04).toFixed(4)}), vec2(.12,.008), .008), .005)*.75);
       float on = step(vSeed, uBoot);
       float flash = on*(1.0-smoothstep(0.0,.06,uBoot-vSeed));
       col = mix(bg*.35, col, on) + vec3(.6,.65,.75)*flash;
@@ -375,70 +377,22 @@ leds.instanceColor.needsUpdate = true;
 // Units: 1 = 10 cm.
 // =====================================================================
 const stage = new THREE.Group(); camera.add(stage);
-const pKey = new THREE.DirectionalLight(0xffffff, 1.0); pKey.position.set(-2.5,3,3); camera.add(pKey); pKey.target = stage;
+const pKey = new THREE.DirectionalLight(0xffffff, .6); pKey.position.set(-3,1.2,2.5); camera.add(pKey); pKey.target = stage;
 
 
-// ---------- phone ("iPhone 18 Pro Max"-ish, deep blue aluminium) ----------
-const PW=.78, PH=1.63, PD=.083;
-const phone = new THREE.Group(); stage.add(phone);
-const frameMat = new THREE.MeshStandardMaterial({color:0x40506e, metalness:.92, roughness:.3, envMap:envTex, envMapIntensity:1});
-const backMat = new THREE.MeshPhysicalMaterial({color:0x26334a, roughness:.5, clearcoat:.5, clearcoatRoughness:.4, envMap:envTex, envMapIntensity:.8});
-phone.add(new THREE.Mesh(slab(PW,PH,PD,.118,.028), [backMat, frameMat]));
-const frontGlass = new THREE.Mesh(flat(PW-.01,PH-.01,.113), new THREE.MeshPhysicalMaterial({color:0x020203, roughness:.1, clearcoat:1, envMap:envTex}));
-frontGlass.position.z = PD/2+.0006; phone.add(frontGlass);
-
-const UI = document.createElement('canvas'); UI.width = 600; UI.height = 1254;
+// ---------- iPhone 17 Pro Max + the Recents card (see phone.js) ----------
+const ph = createPhone(envTex), phone = ph.phone; stage.add(phone);
+const UW = 600, UH = Math.round(UW*DISPLAY.h/DISPLAY.w);
+const UI = document.createElement('canvas'); UI.width = UW; UI.height = UH;
 const ui = UI.getContext('2d');
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
-const screenUI = new THREE.Mesh(flat(PW-.046,PH-.046,.094), new THREE.MeshBasicMaterial({map:uiTex, color:0xc2c2c2}));
-screenUI.position.z = PD/2+.0012; phone.add(screenUI);
-const sheen = new THREE.Mesh(flat(PW-.01,PH-.01,.113), new THREE.MeshStandardMaterial({color:0x000000, roughness:.05, metalness:0, envMap:envTex, envMapIntensity:1.4, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
-sheen.position.z = PD/2+.0018; phone.add(sheen);
-
-// back: full-width camera plateau, lens triangle, flash + LiDAR, MagSafe ring
-const yP = PH/2-.19;
-const plateau = new THREE.Mesh(slab(PW-.06,.3,.02,.1,.008), [frameMat, frameMat]);
-plateau.position.set(0, yP, -PD/2-.009); phone.add(plateau);
-const lensGlass = new THREE.MeshPhysicalMaterial({color:0x07090f, roughness:.04, clearcoat:1, envMap:envTex, envMapIntensity:1.5});
-const lensCore = new THREE.MeshStandardMaterial({color:0x0b1426, emissive:0x101c38, roughness:.2});
-function lens(x,y,r){
-  const g = new THREE.Group(); g.position.set(x, y, -PD/2-.029);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(r*1.13, r*1.13, .02, 48), frameMat); ring.rotation.x = Math.PI/2; g.add(ring);
-  const glass = faceBack(new THREE.Mesh(new THREE.CircleGeometry(r*.94, 48), lensGlass)); glass.position.z = -.0102; g.add(glass);
-  const core = faceBack(new THREE.Mesh(new THREE.RingGeometry(r*.28, r*.46, 40), lensCore)); core.position.z = -.0106; g.add(core);
-  phone.add(g);
-}
-lens(-.262, yP+.07, .056); lens(-.262, yP-.07, .056); lens(-.128, yP, .056);
-const flash = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.022, 32), new THREE.MeshStandardMaterial({color:0xfff1d0, roughness:.3, emissive:0x2a2418})));
-flash.position.set(.22, yP+.055, -PD/2-.0195); phone.add(flash);
-const lidar = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.022, 32), lensGlass)); lidar.position.set(.22, yP-.055, -PD/2-.0195); phone.add(lidar);
-const magRing = faceBack(new THREE.Mesh(new THREE.RingGeometry(.248, .256, 96), new THREE.MeshStandardMaterial({color:0x5d6d8c, roughness:.4, metalness:.3})));
-magRing.position.set(0, -.08, -PD/2-.0008); phone.add(magRing);
-[[PW/2+.003,.22,.2],[PW/2+.003,-.25,.13],[-PW/2-.003,.44,.07],[-PW/2-.003,.27,.12],[-PW/2-.003,.11,.12]].forEach(([x,y,h])=>{
-  const b = new THREE.Mesh(new THREE.BoxGeometry(.012,h,.028), frameMat); b.position.set(x,y,0); phone.add(b);
+ph.display.material.map = uiTex; ph.display.material.needsUpdate = true;
+const rc = createCard(envTex), card = rc.card; phone.add(card);
+const ATTACH = new THREE.Vector3(0, .02, ph.backZ - CARD.d/2 - .0006);
+const soundRings = [0,1,2].map(() => {
+  const r = faceBack(new THREE.Mesh(outlineGeometry(CARD.w, CARD.h, CARD.r, .005), new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.35,.55), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false})));
+  r.position.set(ATTACH.x, ATTACH.y, ph.backZ - .0015); phone.add(r); return r;
 });
-
-// ---------- Recents puck ----------
-const PR=.27, PT=.072, PE=.024;
-const prof = [new THREE.Vector2(0,-PT/2), new THREE.Vector2(PR-PE,-PT/2)];
-for (let i=1;i<=8;i++){ const a=-Math.PI/2+i/8*Math.PI/2; prof.push(new THREE.Vector2(PR-PE+Math.cos(a)*PE, -PT/2+PE+Math.sin(a)*PE)); }
-for (let i=1;i<=8;i++){ const a=i/8*Math.PI/2; prof.push(new THREE.Vector2(PR-PE+Math.cos(a)*PE, PT/2-PE+Math.sin(a)*PE)); }
-prof.push(new THREE.Vector2(0,PT/2));
-const puckGeo = new THREE.LatheGeometry(prof, 80); puckGeo.rotateX(Math.PI/2);
-const puck = new THREE.Group(); phone.add(puck);
-puck.add(new THREE.Mesh(puckGeo, new THREE.MeshPhysicalMaterial({color:0x8f8c86, roughness:.42, clearcoat:.5, clearcoatRoughness:.3, envMap:envTex, envMapIntensity:.55})));
-// warm grey ceramic puck, dark glass centre where the live waveform shows
-const puckGlass = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.178, 64), new THREE.MeshPhysicalMaterial({color:0x08090b, roughness:.08, clearcoat:1, envMap:envTex})));
-puckGlass.position.z = -PT/2-.0008; puck.add(puckGlass);
-const ledMat = new THREE.MeshBasicMaterial({color:0x000000});
-const ledRing = new THREE.Mesh(new THREE.TorusGeometry(.205, .0065, 12, 140), ledMat); ledRing.position.z = -PT/2-.001; puck.add(ledRing);
-const PF = document.createElement('canvas'); PF.width = PF.height = 256; const pf = PF.getContext('2d');
-const puckTex = new THREE.CanvasTexture(PF); puckTex.colorSpace = THREE.SRGBColorSpace;
-const puckFace = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.17, 64), new THREE.MeshBasicMaterial({map:puckTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false})));
-puckFace.position.z = -PT/2-.0016; puck.add(puckFace);
-const ATTACH = new THREE.Vector3(0, -.08, -PD/2-PT/2-.002);
-const snapRing = new THREE.Mesh(new THREE.TorusGeometry(.272, .007, 10, 140), new THREE.MeshBasicMaterial({color:new THREE.Color(2.4,1.5,.6), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false}));
-snapRing.position.copy(ATTACH); phone.add(snapRing);
 
 // ---------- Wear Close bracelets (A2: double cord, square NFC node in front, slider at the back) ----------
 const BS = 1.3; // bracelets read better a touch larger than life next to the phone
@@ -489,16 +443,19 @@ function wrap(text, maxW){ const words = text.split(' '), lines = []; let cur = 
 function heart2d(g,cx,cy,s){ g.beginPath(); g.moveTo(cx,cy+s*.42); g.bezierCurveTo(cx-s*1.15,cy-s*.35,cx-s*.5,cy-s*1.05,cx,cy-s*.42); g.bezierCurveTo(cx+s*.5,cy-s*1.05,cx+s*1.15,cy-s*.35,cx,cy+s*.42); g.fill(); }
 
 function statusBar(dark, rec){
+  // Dynamic Island is 20.9 × 6.1 mm, 1.8 mm below the top of the display; the clock and icons sit in the "ears"
+  const pxmm = UW/(DISPLAY.w*100), iw = 20.9*pxmm, ih = 6.1*pxmm, iy = 1.8*pxmm, cy = iy + ih/2;
   const fg = dark ? '#ffffff' : '#1b1a18';
-  ui.fillStyle = fg; ui.font = `600 30px ${SF}`; ui.textBaseline = 'middle'; ui.textAlign = 'left';
-  ui.fillText(hhmm(clock.shown), 66, 64);
-  ui.fillStyle = '#000'; rr(204,28,192,62,31); ui.fill();
-  if (rec > 0){ ui.fillStyle = `rgba(255,181,71,${rec})`; ui.beginPath(); ui.arc(370,59,7,0,Math.PI*2); ui.fill(); }
-  ui.fillStyle = fg;
-  for (let i=0;i<4;i++){ rr(424+i*11, 74-(i+1)*6.5, 7, (i+1)*6.5, 2); ui.fill(); }
-  ui.strokeStyle = fg; ui.lineWidth = 3; ui.lineCap = 'round';
-  for (let i=0;i<3;i++){ ui.beginPath(); ui.arc(486, 76, 6+i*6.5, Math.PI*1.25, Math.PI*1.75); ui.stroke(); }
-  ui.lineWidth = 2; rr(512,52,40,22,6); ui.stroke(); rr(515,55,28,16,3); ui.fill(); rr(554,59,3,8,1); ui.fill();
+  ui.fillStyle = fg; ui.font = `600 25px ${SF}`; ui.textBaseline = 'middle'; ui.textAlign = 'center';
+  ui.fillText(hhmm(clock.shown), (UW/2 - iw/2)/2 + 6, cy + 1);
+  ui.fillStyle = '#000'; rr(UW/2 - iw/2, iy, iw, ih, ih/2); ui.fill();
+  if (rec > 0){ ui.fillStyle = `rgba(255,181,71,${rec})`; ui.beginPath(); ui.arc(UW/2 + iw/2 - ih/2, cy, 6, 0, Math.PI*2); ui.fill(); }
+  const rx = UW/2 + iw/2 + (UW/2 - iw/2)/2;
+  ui.fillStyle = fg; ui.textAlign = 'left';
+  for (let i=0;i<4;i++){ rr(rx - 52 + i*8, cy + 8 - (i+1)*4.4, 5.5, (i+1)*4.4, 1.5); ui.fill(); }
+  ui.strokeStyle = fg; ui.lineWidth = 2.6; ui.lineCap = 'round';
+  for (let i=0;i<3;i++){ ui.beginPath(); ui.arc(rx - 6, cy + 9, 4 + i*4.6, Math.PI*1.25, Math.PI*1.75); ui.stroke(); }
+  ui.lineWidth = 1.8; rr(rx + 12, cy - 7, 30, 15, 4.5); ui.stroke(); rr(rx + 14.5, cy - 4.5, 21, 10, 2.5); ui.fill(); rr(rx + 43.5, cy - 3, 2.5, 6, 1); ui.fill();
 }
 
 const CALL = {name:'Dentist', sub:'Dr. Novák'};
@@ -513,8 +470,8 @@ const QUERY = 'What did the dentist tell me?';
 const ANSWER = 'Floss every night, especially on the left side. Your next visit is March 3 at 9:30.';
 
 function drawCall(rec, secs, t){
-  const g = ui.createLinearGradient(0,0,0,1254); g.addColorStop(0,'#26333f'); g.addColorStop(1,'#07090c');
-  ui.fillStyle = g; ui.fillRect(0,0,600,1254);
+  const g = ui.createLinearGradient(0,0,0,UH); g.addColorStop(0,'#26333f'); g.addColorStop(1,'#07090c');
+  ui.fillStyle = g; ui.fillRect(0,0,600,UH);
   statusBar(true, rec);
   ui.fillStyle = '#3e4c5b'; ui.beginPath(); ui.arc(300,300,92,0,Math.PI*2); ui.fill();
   ui.fillStyle = '#fff'; ui.textAlign = 'center'; ui.font = `500 84px ${SF}`; ui.fillText('D', 300, 304);
@@ -542,7 +499,7 @@ function drawCall(rec, secs, t){
   ui.save(); ui.translate(300,1150); ui.rotate(Math.PI*.75); ui.fillStyle = '#fff'; rr(-30,-9,60,18,9); ui.fill(); ui.restore();
 }
 function appHeader(sub){
-  ui.fillStyle = '#0b0d10'; ui.fillRect(0,0,600,1254);
+  ui.fillStyle = '#0b0d10'; ui.fillRect(0,0,600,UH);
   statusBar(true, 1);
   ui.textAlign = 'left'; ui.fillStyle = '#fff'; ui.font = `700 54px ${SF}`; ui.fillText('Recents', 46, 178);
   ui.fillStyle = 'rgba(255,255,255,.5)'; ui.font = `400 24px ${SF}`; ui.fillText(sub, 48, 226);
@@ -594,12 +551,12 @@ function drawAsk(p, t){
   if (n < QUERY.length && Math.floor(t*2)%2===0){ const w = ui.measureText(typed).width; ui.fillStyle = '#ffb547'; ui.fillRect(84+w, 1092, 3, 36); }
 }
 function drawPulse(stateP, t){
-  ui.fillStyle = '#f3efe8'; ui.fillRect(0,0,600,1254);
+  ui.fillStyle = '#f3efe8'; ui.fillRect(0,0,600,UH);
   statusBar(false, 0);
   ui.textAlign = 'center'; ui.fillStyle = '#7d776c'; ui.font = `500 21px ${SF}`;
   ui.letterSpacing = '6px'; ui.fillText('WEAR CLOSE', 303, 170); ui.letterSpacing = '0px';
-  ui.fillStyle = '#1b1a18'; ui.font = `300 92px ${SERIF}`; ui.fillText('Sarah', 300, 310);
-  ui.fillStyle = '#8a8478'; ui.font = `400 24px ${SF}`; ui.fillText('Toronto · 5:14 PM', 300, 366);
+  ui.fillStyle = '#1b1a18'; ui.font = `300 92px ${SERIF}`; ui.fillText('Zuzka', 300, 310);
+  ui.fillStyle = '#8a8478'; ui.font = `400 24px ${SF}`; ui.fillText('286 km away', 300, 366);
   const cx = 300, cy = 660;
   if (stateP >= 1){
     const k = stateP >= 2 ? 0 : (t*1.4)%1;
@@ -609,7 +566,7 @@ function drawPulse(stateP, t){
   ui.fillStyle = stateP >= 2 ? '#c97462' : '#e6dfd2'; ui.beginPath(); ui.arc(cx,cy,132,0,Math.PI*2); ui.fill();
   ui.fillStyle = stateP >= 2 ? '#fff' : '#1b1a18'; heart2d(ui, cx, cy+8, 58);
   ui.fillStyle = '#1b1a18'; ui.font = `400 27px ${SF}`;
-  ui.fillText(stateP >= 2 ? 'Sarah felt it.' : stateP >= 1 ? 'Sending your pulse…' : 'Bring your phone to your bracelet', 300, 960);
+  ui.fillText(stateP >= 2 ? 'Zuzka felt it.' : stateP >= 1 ? 'Sending your pulse…' : 'Bring your phone to your bracelet', 300, 960);
   ui.fillStyle = '#8a8478'; ui.font = `400 22px ${SF}`; ui.fillText('412 days together', 300, 1150);
   ui.textAlign = 'left';
 }
@@ -628,17 +585,6 @@ function renderUI(kind, p, now){
   ui.restore();
   uiTex.needsUpdate = true;
 }
-function drawPuckFace(level, t){
-  pf.clearRect(0,0,256,256);
-  if (level <= 0){ puckTex.needsUpdate = true; return; }
-  pf.fillStyle = `rgba(255,181,71,${.9*level})`;
-  for (let i=0;i<40;i++){
-    const a = i/40*Math.PI*2, h = 10 + 34*Math.abs(Math.sin(i*1.3 + t*5))*(.35+.65*Math.abs(Math.sin(i*2.7 - t*2.3)));
-    pf.save(); pf.translate(128,128); pf.rotate(a); pf.beginPath(); pf.roundRect(-3, -66-h, 6, h, 3); pf.fill(); pf.restore();
-  }
-  pf.beginPath(); pf.arc(128,128,10,0,Math.PI*2); pf.fill();
-  puckTex.needsUpdate = true;
-}
 function drawNotif(){
   nc.clearRect(0,0,720,196);
   nc.fillStyle = 'rgba(247,244,239,.96)'; nc.beginPath(); nc.roundRect(4,4,712,188,46); nc.fill();
@@ -653,34 +599,49 @@ function drawNotif(){
 
 // ---------- keyframed poses (story time st: chapter i holds on [2i,2i+1], moves to i+1 on [2i+1,2i+2]) ----------
 const TAU = Math.PI*2;
-const TAP_ROT = [-1.02, TAU+.12, .22];
+const TAP_ROT = [-1.02, .12, .22];
 const TAP_POS = STONE_NODE.clone().add(new THREE.Vector3(-.06, .5, .2)).toArray();
+// lying back-up, long edge to the camera, close in: the card next to the camera plateau, like Ruune shows it
+const PROFILE_ROT = [Math.PI/2 + .24, .1, Math.PI/2], PROFILE_POS = [.78, -.1, .3];
 const PHONE_KEYS = [
   [3.25, [1.4,-2.9,-.8], [.7,-1.4,.35], 1],
   [3.95, [0,0,0], [-.06,-.34,.05], 1],
   [4.0,  [0,0,0], [-.06,-.34,.05], 1],
-  [4.18, [0,.02,0], [-.04,Math.PI-.42,-.04], 1],
-  [4.55, [0,.02,0], [-.04,Math.PI-.36,-.03], 1],
-  [4.72, [0,0,0], [-.05,TAU-.3,.03], 1],
-  [5.05, [0,0,0], [-.05,TAU-.27,.03], 1],
-  [5.6,  [-.55,.6,.3], [-.18,TAU+.3,.5], .6],
-  [6.02, [-.55,.6,.3], [-.18,TAU+.3,.5], .6],
+  [4.15, [0,.02,0], [-.05,Math.PI-.45,-.04], 1],
+  [4.43, [0,.02,0], [-.05,Math.PI-.38,-.03], 1],
+  [4.58, PROFILE_POS, PROFILE_ROT, 2.5],
+  [4.67, [.82,-.08,.3], [Math.PI/2 + .2, .06, Math.PI/2], 2.5],
+  [4.79, [0,0,0], [-.05,-.3,.03], 1],
+  [5.05, [0,0,0], [-.05,-.27,.03], 1],
+  [5.6,  [-.55,.6,.3], [-.18,.3,.5], .6],
+  [6.02, [-.55,.6,.3], [-.18,.3,.5], .6],
   [6.24, TAP_POS, TAP_ROT, .6],
   [6.42, TAP_POS, TAP_ROT, .6],
-  [6.62, [-.6,.56,.3], [-.18,TAU+.28,.45], .6],
-  [7.02, [-.6,.56,.3], [-.18,TAU+.28,.45], .6],
-  [7.55, [-1.3,-3.0,-.4], [.6,TAU+.9,.9], .6]
+  [6.62, [-.6,.56,.3], [-.18,.28,.45], .6],
+  [7.02, [-.6,.56,.3], [-.18,.28,.45], .6],
+  [7.55, [-1.3,-3.0,-.4], [.6,.9,.9], .6]
 ];
+const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), ea = new THREE.Euler(), eb = new THREE.Euler();
 function pose(keys, st, obj){
   let i = 0; while (i < keys.length-2 && st >= keys[i+1][0]) i++;
   const a = keys[i], b = keys[i+1], f = easeIO(clamp01((st-a[0])/(b[0]-a[0])));
   obj.position.set(lerp(a[1][0],b[1][0],f), lerp(a[1][1],b[1][1],f), lerp(a[1][2],b[1][2],f));
-  obj.rotation.set(lerp(a[2][0],b[2][0],f), lerp(a[2][1],b[2][1],f), lerp(a[2][2],b[2][2],f));
+  qa.setFromEuler(ea.set(...a[2])); qb.setFromEuler(eb.set(...b[2]));
+  obj.quaternion.slerpQuaternions(qa, qb, f);
   obj.scale.setScalar(lerp(a[3],b[3],f));
 }
-const SNAP = 4.4, ARRIVE = 6.56;
+const SNAP = 4.33, ARRIVE = 6.56;
 const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
-const PUCK_FROM = new THREE.Vector3(-1.15, .6, -1.25), PUCK_AWAY = new THREE.Vector3(2.6, -1.4, -2.2);
+const CARD_FROM = new THREE.Vector3(-1.2, .55, -1.3), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2);
+const dimsEl = document.getElementById('dims'), dimCard = document.getElementById('dimCard'), dimCam = document.getElementById('dimCam');
+const dA = new THREE.Vector3(), dB = new THREE.Vector3();
+function toScreen(local, out){ out.copy(local); phone.localToWorld(out); out.project(camera); return [(out.x*.5+.5)*innerWidth, (-out.y*.5+.5)*innerHeight]; }
+// a dimension line drawn like a technical drawing: two ticks, a bar offset to the side, a label
+function dimension(el, pa, pb, label, sub){
+  const [x1,y1] = toScreen(pa, dA), [x2,y2] = toScreen(pb, dB);
+  const off = 26, bx = Math.max(x1,x2) + off;
+  el.innerHTML = `<line x1="${x1+6}" y1="${y1}" x2="${bx+6}" y2="${y1}"/><line x1="${x2+6}" y1="${y2}" x2="${bx+6}" y2="${y2}"/><line class="bar" x1="${bx}" y1="${y1}" x2="${bx}" y2="${y2}"/><text x="${bx+14}" y="${(y1+y2)/2+4}">${label}</text><text class="sub" x="${bx+14}" y="${(y1+y2)/2+20}">${sub}</text>`;
+}
 
 function updateStage(st, now){
   const t = now/1000;
@@ -699,30 +660,41 @@ function updateStage(st, now){
   pose(PHONE_KEYS, st, phone);
   if (!reduced){ phone.position.y += Math.sin(t*1.1)*.018; phone.rotation.z += Math.sin(t*.8)*.012; }
 
-  // puck: magnet pull (accelerating), snap, recording, then off it goes
-  const flyK = clamp01((st-4.18)/(SNAP-4.18)), awayK = smooth(5.0, 5.32, st);
-  puck.visible = st > 4.18 && awayK < 1;
-  if (puck.visible){
+  // card: magnet pull (accelerating), snap, recording, then off it goes
+  const flyK = clamp01((st-4.15)/(SNAP-4.15)), awayK = smooth(5.0, 5.32, st);
+  card.visible = st > 4.15 && awayK < 1;
+  if (card.visible){
     const e = flyK*flyK*flyK;
-    puck.position.lerpVectors(PUCK_FROM, ATTACH, e);
-    puck.position.y += Math.sin(flyK*Math.PI)*.22*(1-flyK);
-    puck.rotation.set((1-e)*.9, (1-e)*-.7, (1-e)*7);
+    card.position.lerpVectors(CARD_FROM, ATTACH, e);
+    card.position.y += Math.sin(flyK*Math.PI)*.2*(1-flyK);
+    card.rotation.set((1-e)*1.1, (1-e)*-.9, (1-e)*2.4);
     const since = (now - fx.snapT)/1000;
-    if (st >= SNAP && since < .5) puck.position.z -= Math.sin(Math.min(1,since/.5)*Math.PI*3)*Math.exp(-since*7)*.03;
-    if (awayK > 0){ puck.position.lerp(PUCK_AWAY, easeIO(awayK)); puck.rotation.z += awayK*5; }
+    if (st >= SNAP && since < .5) card.position.z -= Math.sin(Math.min(1,since/.5)*Math.PI*3)*Math.exp(-since*7)*.02;
+    if (awayK > 0){ card.position.lerp(CARD_AWAY, easeIO(awayK)); card.rotation.z += awayK*4; }
   }
   const sinceSnap = (now - fx.snapT)/1000;
   const on = st >= SNAP && awayK < 1 ? Math.min(1, Math.max(0, sinceSnap/.35)) * (sinceSnap < .35 ? (Math.random()>.35?1:.25) : 1) : 0;
-  const rec = st >= SNAP && st < 5.0 ? on : 0;
-  ledMat.color.setRGB(2.6, 1.55, .55).multiplyScalar(on*(.75 + .25*Math.sin(t*3.2)));
-  drawPuckFace(rec, t);
-  const ringK = st >= SNAP ? clamp01(sinceSnap/.75) : 1;
-  snapRing.material.opacity = (1-ringK)*.95; snapRing.scale.setScalar(1 + ringK*1.8);
+  rc.ledM.color.setRGB(3.2, 1.8, .55).multiplyScalar(on*(.6 + .4*Math.sin(t*4)));
+  // while it records, soft outlines ripple off the card
+  const recBack = st >= SNAP && st < 4.5 && !reduced;
+  soundRings.forEach((r, i) => {
+    const k = ((t*.55 + i/3) % 1);
+    r.visible = recBack;
+    r.scale.setScalar(1 + k*.55); r.material.opacity = (1-k)*.55*on;
+  });
+  // side profile: 2.9 mm card next to the 4.2 mm camera bump
+  const dimK = smooth(4.55, 4.6, st)*(1 - smooth(4.68, 4.72, st));
+  dimsEl.style.opacity = dimK.toFixed(3);
+  if (dimK > 0){
+    const ex = CARD.w/2 + .002, cy = ATTACH.y;
+    dimension(dimCard, new THREE.Vector3(ex, cy, ph.backZ), new THREE.Vector3(ex, cy, ph.backZ - CARD.d), '2.9 mm', 'Recents');
+    dimension(dimCam, new THREE.Vector3(.332, ph.yP - .097, ph.backZ), new THREE.Vector3(.332, ph.yP - .097, ph.lensTop), '4.2 mm', 'camera bump');
+  }
 
   // screen content
-  if (st < 4.6) renderUI('call', st >= SNAP ? on : 0, now);
-  else if (st < 4.8) renderUI('transcript', smooth(4.6, 4.8, st), now);
-  else if (st < 5.3) renderUI('ask', clamp01((st-4.8)/.17), now);
+  if (st < 4.7) renderUI('call', st >= SNAP ? on : 0, now);
+  else if (st < 4.86) renderUI('transcript', smooth(4.72, 4.86, st), now);
+  else if (st < 5.3) renderUI('ask', clamp01((st-4.86)/.13), now);
   else renderUI('pulse', st < 6.22 ? 0 : st < ARRIVE ? 1 : 2, now);
 
   // bracelets
@@ -777,7 +749,7 @@ const flashEl = document.getElementById('flash');
 // ---------- post ----------
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .62);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .74);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -875,7 +847,7 @@ document.getElementById('copy').addEventListener('click', () => {
   else getSelection().selectAllChildren(document.getElementById('mailtxt'));
 });
 
-const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · warm-up day 6/14','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to sarah ♥'];
+const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · warm-up day 6/14','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
 const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
@@ -972,7 +944,7 @@ function frame(now){
     meEl.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${Math.max(56, (-corner.y*.5+.5)*innerHeight)}px) translate(-50%,-100%)`;
   }
   meEl.style.opacity = meOn ? 1 : 0;
-  nav.style.opacity = (a===S-2 && loc > .6) ? 0 : 1;
+  nav.style.opacity = ((a===S-2 && loc > .6) || uniforms.uDim.value > .3) ? 0 : 1;
 
   // LEDs + HUD + live counters
   ledT += dt;

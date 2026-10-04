@@ -73,3 +73,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
   .hud span{display:none}
 }
 @media (prefers-reduced-motion:reduce){body,a,button{cursor:auto}#cross{display:none}.hud i{animation:none}}
+
+#dims{position:fixed;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;opacity:0;overflow:visible}
+#dims line{stroke:var(--dim);stroke-width:1}
+#dims line.bar{stroke-width:1.5}
+#dims text{font-family:var(--f-mono);font-weight:300;font-size:13px;letter-spacing:.06em;fill:var(--text)}
+#dims text.sub{font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;fill:var(--dim)}
+#dims .hot line{stroke:var(--amber)}
+#dims .hot text:not(.sub){fill:var(--amber)}
