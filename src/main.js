@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rrShape, slab, flat, faceBack } from './shapes.js';
 import { createDesk } from './desk.js';
+import { reel } from './reels.js';
 import { createPhone, createCard, outlineGeometry, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -851,6 +852,12 @@ const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','intern
 const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
+const rPhones = reel(sPhones), rTaps = reel(sTaps), rHands = reel(document.getElementById('sHands')), rJobs = reel(document.getElementById('hJobs'));
+const tapsNow = () => Math.floor(clock.live*3600*31.7).toLocaleString('en-US');
+// the counters spin up like a slot machine every time the MationX chapter comes into view
+new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ rPhones.reveal(String(phones)); rTaps.reveal(tapsNow()); rHands.reveal('0'); } }), {threshold:.6})
+  .observe(document.querySelector('.stats'));
+let tapT = 0;
 document.getElementById('hDev').textContent = COUNT;
 
 // ---------- loop ----------
@@ -953,14 +960,14 @@ function frame(now){
     for (let k=0;k<6;k++){ const i=Math.floor(Math.random()*COUNT); leds.setColorAt(i, Math.random()>.5 ? LEDOFF : (Math.random()>.85 ? AMBER : LEDGREEN)); }
     leds.instanceColor.needsUpdate = true;
   }
-  sTaps.textContent = Math.floor(clock.live*3600*31.7).toLocaleString('en-US');
+  tapT += dt; if (tapT > .3){ tapT = 0; rTaps.set(tapsNow()); }
   hudT += dt;
   if (hudT > .5){
     hudT = 0;
     jobs = Math.max(COUNT-6, Math.min(COUNT, jobs + (Math.random()>.5?1:-1)));
     phones = Math.max(498, Math.min(526, phones + Math.round((Math.random()-.5)*3)));
-    document.getElementById('hJobs').textContent = jobs;
-    sPhones.textContent = phones;
+    rJobs.set(String(jobs));
+    rPhones.set(String(phones));
     hTime.textContent = hhmm(clock.preview ?? clock.live);
     hShift.textContent = clock.preview === null ? shiftName(clock.live) : 'Preview · ' + shiftName(clock.preview);
     const on = Math.max(Math.round(prog), 1) === 1 ? 0 : Math.round(prog); navLinks.forEach(l=>l.classList.toggle('on', +l.dataset.i===on));

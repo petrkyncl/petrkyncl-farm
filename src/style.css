@@ -81,3 +81,12 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 #dims text.sub{font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;fill:var(--dim)}
 #dims .hot line{stroke:var(--amber)}
 #dims .hot text:not(.sub){fill:var(--amber)}
+
+/* slot-machine digits (reels.js) */
+.reel{display:inline-flex;align-items:flex-start;overflow:hidden;height:1em;line-height:1em !important;vertical-align:top}
+.reel .d{display:inline-block;height:1em;width:1ch;overflow:hidden;text-align:center}
+.reel .s{display:block;white-space:pre;line-height:1em;will-change:transform}
+.reel .c{display:inline-block;line-height:1em}
+.stats b.reel{line-height:1em}
+.reel span{font-size:inherit;font-weight:inherit;letter-spacing:0;text-transform:none;color:inherit}
+.hud b.reel{vertical-align:-.12em}
