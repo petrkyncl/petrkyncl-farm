@@ -46,13 +46,9 @@ function oakTexture(){
     }
     // medullary rays: short, faint, lighter flecks
     for (let k=0;k<180;k++){ g.fillStyle = `rgba(245,232,205,${.05+r()*.1})`; g.fillRect(r()*w, y0 + r()*sh, 3 + r()*14, .8 + r()*1.2); }
-    // a knot now and then
-    if (r() > .6){ const kx = r()*w, ky = y0 + sh*(.3 + r()*.4), kr = 6 + r()*10;
-      for (let q=4;q>0;q--){ g.strokeStyle = `rgba(90,58,32,${.12 + q*.05})`; g.lineWidth = 1.2; g.beginPath(); g.ellipse(kx, ky, kr*q*.8, kr*q*.45, .3, 0, Math.PI*2); g.stroke(); }
-      g.fillStyle = 'rgba(80,52,30,.5)'; g.beginPath(); g.ellipse(kx, ky, kr*.8, kr*.45, .3, 0, Math.PI*2); g.fill(); }
     g.restore();
     // glue line between staves
-    g.fillStyle = 'rgba(90,64,38,.45)'; g.fillRect(0, y0 + sh - .6, w, 1.2);
+    g.fillStyle = 'rgba(90,64,38,.18)'; g.fillRect(0, y0 + sh - .4, w, .8);
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
