@@ -592,7 +592,8 @@ const UW = 600, UH = Math.round(UW*1.9378/0.8924);
 // the model's Dynamic Island, measured off its geometry, as fractions of the display (seen from the front)
 const ISLAND = { cx:.5096, cy:.0345, w:.2689, h:.0379 };
 const UI = document.createElement('canvas'); UI.width = UW; UI.height = UH;
-const ui = UI.getContext('2d');
+let ui = UI.getContext('2d');
+const UI_CTX = ui;
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
 ph.display.material.map = uiTex; ph.display.material.needsUpdate = true;
 const rc = createCard(envTex), card = rc.card; phone.add(card);
@@ -829,18 +830,106 @@ function drawPulse(stateP, t){
   ui.fillStyle = '#8a8478'; ui.font = `400 22px ${SF}`; ui.fillText('412 days together', 300, 1150);
   ui.textAlign = 'left';
 }
-let uiKey = '';
+// ---------- iOS home screen, and the go-home → open-app transition ----------
+const SNAP_A = document.createElement('canvas'), SNAP_B = document.createElement('canvas');
+SNAP_A.width = SNAP_B.width = UW; SNAP_A.height = SNAP_B.height = UH;
+function snapshot(canvas, draw){ const keep = ui; ui = canvas.getContext('2d'); ui.save(); draw(); ui.restore(); ui = keep; }
+const HOME = { cols:[96, 233, 368, 504], top:250, rowH:168, icon:96, dockY:0 };
+const APPS = [
+  ['Recents','recents'], ['Wear Close','wear'], ['Calendar','cal'], ['Photos','photos'],
+  ['Clock','clock'], ['Weather','weather'], ['Maps','maps'], ['Notes','notes'],
+  ['Camera','camera'], ['Settings','settings'], ['Wallet','wallet'], ['Health','health']
+];
+const DOCK = ['phone','safari','messages','music'];
+function appIcon(kind, x, y, s){
+  const g = ui, r = s*.225;
+  const fill = (c) => { g.fillStyle = c; rr(x - s/2, y - s/2, s, s, r); g.fill(); };
+  const grad = (a, b) => { const gr = g.createLinearGradient(0, y - s/2, 0, y + s/2); gr.addColorStop(0, a); gr.addColorStop(1, b); return gr; };
+  g.save();
+  switch (kind){
+    case 'recents': fill('#121316'); g.fillStyle = '#ffb547'; for (let i=0;i<7;i++){ const h = s*(.12 + .3*Math.abs(Math.sin(i*1.9 + 1))); rr(x - s*.3 + i*s*.1, y - h/2, s*.055, h, s*.03); g.fill(); } break;
+    case 'wear': fill('#efe7da'); g.fillStyle = '#c97462'; heart2d(g, x, y + s*.04, s*.3); break;
+    case 'cal': fill('#ffffff'); g.fillStyle = '#ff3b30'; g.font = `600 ${s*.15}px ${SF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SUN', x, y - s*.26); g.fillStyle = '#111'; g.font = `300 ${s*.48}px ${SF}`; g.fillText('5', x, y + s*.1); break;
+    case 'photos': fill('#ffffff'); ['#f9b233','#f26b3a','#e5426f','#a54bd2','#4a7cf0','#34b2e4','#4ac57b','#b3d334'].forEach((c,i) => { g.save(); g.translate(x, y); g.rotate(i*Math.PI/4); g.fillStyle = c; g.globalAlpha = .85; g.beginPath(); g.ellipse(0, -s*.17, s*.09, s*.17, 0, 0, Math.PI*2); g.fill(); g.restore(); }); break;
+    case 'clock': fill('#111'); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, s*.38, 0, Math.PI*2); g.fill(); g.strokeStyle = '#111'; g.lineWidth = s*.035; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - s*.25); g.moveTo(x, y); g.lineTo(x + s*.17, y + s*.06); g.stroke(); g.strokeStyle = '#ff9500'; g.lineWidth = s*.015; g.beginPath(); g.moveTo(x, y + s*.08); g.lineTo(x - s*.05, y - s*.3); g.stroke(); break;
+    case 'weather': g.fillStyle = grad('#4aa8ff', '#1f6fe0'); rr(x - s/2, y - s/2, s, s, r); g.fill(); g.fillStyle = '#ffd60a'; g.beginPath(); g.arc(x - s*.1, y - s*.08, s*.17, 0, Math.PI*2); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(x + s*.05, y + s*.12, s*.24, s*.11, 0, 0, Math.PI*2); g.fill(); break;
+    case 'maps': fill('#e9f2df'); g.fillStyle = '#8dc96b'; g.fillRect(x - s/2, y - s*.05, s, s*.22); g.fillStyle = '#fff'; g.save(); g.translate(x, y); g.rotate(-.5); g.fillRect(-s*.6, -s*.05, s*1.2, s*.1); g.restore(); g.fillStyle = '#2f80ed'; g.beginPath(); g.moveTo(x + s*.15, y - s*.28); g.lineTo(x + s*.28, y - s*.02); g.lineTo(x + s*.15, y - s*.08); g.lineTo(x + s*.02, y - s*.02); g.closePath(); g.fill(); break;
+    case 'notes': fill('#ffffff'); g.fillStyle = '#ffd60a'; g.fillRect(x - s/2, y - s/2, s, s*.24); g.fillStyle = '#d0d0d0'; for (let i=0;i<3;i++) g.fillRect(x - s*.36, y - s*.04 + i*s*.13, s*.72, s*.025); break;
+    case 'camera': fill('#d9d9de'); g.fillStyle = '#2b2b2e'; rr(x - s*.34, y - s*.2, s*.68, s*.44, s*.08); g.fill(); g.fillStyle = '#c8c8cd'; g.beginPath(); g.arc(x, y + s*.02, s*.14, 0, Math.PI*2); g.fill(); g.fillStyle = '#2b2b2e'; g.beginPath(); g.arc(x, y + s*.02, s*.09, 0, Math.PI*2); g.fill(); break;
+    case 'settings': g.fillStyle = grad('#8e8e93', '#5c5c62'); rr(x - s/2, y - s/2, s, s, r); g.fill(); g.fillStyle = '#2c2c2e'; g.beginPath(); for (let i=0;i<16;i++){ const a = i/16*Math.PI*2, rr2 = i%2 ? s*.3 : s*.36; g.lineTo(x + Math.cos(a)*rr2, y + Math.sin(a)*rr2); } g.closePath(); g.fill(); g.fillStyle = '#9b9ba0'; g.beginPath(); g.arc(x, y, s*.13, 0, Math.PI*2); g.fill(); break;
+    case 'wallet': fill('#111'); ['#4a90d9','#f5a623','#7ed321','#d0021b'].forEach((c,i) => { g.fillStyle = c; rr(x - s*.34, y - s*.3 + i*s*.09, s*.68, s*.2, s*.04); g.fill(); }); g.fillStyle = '#2c2c2e'; rr(x - s*.36, y + s*.02, s*.72, s*.3, s*.05); g.fill(); break;
+    case 'health': fill('#ffffff'); g.fillStyle = '#ff2d55'; heart2d(g, x, y + s*.04, s*.32); break;
+    case 'phone': g.fillStyle = grad('#5cf07d', '#29c74b'); rr(x - s/2, y - s/2, s, s, r); g.fill(); g.save(); g.translate(x - s*.2, y - s*.2); g.scale(s/24*.4*2, s/24*.4*2); g.fillStyle = '#fff'; g.fill(new Path2D('M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z')); g.restore(); break;
+    case 'safari': fill('#ffffff'); g.fillStyle = '#1a8cff'; g.beginPath(); g.arc(x, y, s*.38, 0, Math.PI*2); g.fill(); g.save(); g.translate(x, y); g.rotate(Math.PI/4); g.fillStyle = '#ff3b30'; g.beginPath(); g.moveTo(0, -s*.3); g.lineTo(s*.06, 0); g.lineTo(-s*.06, 0); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, s*.3); g.lineTo(s*.06, 0); g.lineTo(-s*.06, 0); g.fill(); g.restore(); break;
+    case 'messages': g.fillStyle = grad('#5cf07d', '#29c74b'); rr(x - s/2, y - s/2, s, s, r); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(x, y - s*.02, s*.32, s*.25, 0, 0, Math.PI*2); g.fill(); g.beginPath(); g.moveTo(x - s*.2, y + s*.12); g.lineTo(x - s*.26, y + s*.28); g.lineTo(x - s*.05, y + s*.18); g.fill(); break;
+    case 'music': g.fillStyle = grad('#ff5f6d', '#f72a48'); rr(x - s/2, y - s/2, s, s, r); g.fill(); g.fillStyle = '#fff'; g.fillRect(x + s*.08, y - s*.26, s*.05, s*.4); g.fillRect(x - s*.14, y - s*.2, s*.05, s*.4); g.fillRect(x - s*.14, y - s*.26, s*.27, s*.07); g.beginPath(); g.ellipse(x - s*.19, y + s*.2, s*.09, s*.07, 0, 0, Math.PI*2); g.fill(); g.beginPath(); g.ellipse(x + s*.03, y + s*.14, s*.09, s*.07, 0, 0, Math.PI*2); g.fill(); break;
+  }
+  // Liquid Glass rim
+  const sh = g.createLinearGradient(0, y - s/2, 0, y + s/2); sh.addColorStop(0, 'rgba(255,255,255,.35)'); sh.addColorStop(.4, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(255,255,255,.12)');
+  g.strokeStyle = sh; g.lineWidth = 2; rr(x - s/2 + 1, y - s/2 + 1, s - 2, s - 2, r); g.stroke();
+  g.restore();
+}
+function iconPos(name){ const i = APPS.findIndex(a => a[1] === name); return [HOME.cols[i%4], HOME.top + Math.floor(i/4)*HOME.rowH]; }
+function drawHome(press){
+  const g = ui;
+  const bg = g.createLinearGradient(0, 0, UW*.6, UH); bg.addColorStop(0, '#1b2b5e'); bg.addColorStop(.5, '#3a2a6b'); bg.addColorStop(1, '#0d1430'); g.fillStyle = bg; g.fillRect(0, 0, UW, UH);
+  const glow = g.createRadialGradient(UW*.8, UH*.25, 10, UW*.8, UH*.25, UW*.9); glow.addColorStop(0, 'rgba(120,170,255,.55)'); glow.addColorStop(1, 'rgba(120,170,255,0)'); g.fillStyle = glow; g.fillRect(0, 0, UW, UH);
+  const glow2 = g.createRadialGradient(UW*.1, UH*.8, 10, UW*.1, UH*.8, UW*.8); glow2.addColorStop(0, 'rgba(255,120,180,.35)'); glow2.addColorStop(1, 'rgba(255,120,180,0)'); g.fillStyle = glow2; g.fillRect(0, 0, UW, UH);
+  statusBar(true, 0);
+  APPS.forEach(([label, kind], i) => {
+    const [x, y] = iconPos(kind), pr = kind === 'wear' ? press : 0;
+    g.save(); g.translate(x, y); g.scale(1 - .08*pr, 1 - .08*pr); g.translate(-x, -y);
+    appIcon(kind, x, y, HOME.icon);
+    if (pr > 0){ g.fillStyle = `rgba(0,0,0,${.3*pr})`; rr(x - HOME.icon/2, y - HOME.icon/2, HOME.icon, HOME.icon, HOME.icon*.225); g.fill(); }
+    g.restore();
+    g.fillStyle = 'rgba(255,255,255,.92)'; g.font = `500 19px ${SF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x, y + HOME.icon/2 + 22);
+  });
+  // search pill and the glass dock
+  g.fillStyle = 'rgba(255,255,255,.16)'; rr(UW/2 - 70, UH - 262, 140, 44, 22); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.font = `500 20px ${SF}`; g.fillText('Search', UW/2 + 8, UH - 240);
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2.4; g.beginPath(); g.arc(UW/2 - 34, UH - 242, 7, 0, Math.PI*2); g.stroke(); g.beginPath(); g.moveTo(UW/2 - 29, UH - 237); g.lineTo(UW/2 - 24, UH - 232); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.17)'; rr(22, UH - 190, UW - 44, 140, 52); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 1.5; rr(23, UH - 189, UW - 46, 138, 51); g.stroke();
+  DOCK.forEach((k, i) => appIcon(k, HOME.cols[i], UH - 120, HOME.icon));
+}
+// app → home (the card shrinks into its icon while the finger swipes up), home, home → app (it grows from its icon)
+function drawGoHome(p, t){
+  const g = ui, ease = x => 1 - Math.pow(1 - clamp01(x), 3);
+  const tap = smooth(.4, .48, p)*(1 - smooth(.5, .58, p));
+  drawHome(tap);
+  const card = (snap, from, k) => {
+    const [ix, iy] = from, s = lerp(1, HOME.icon/UW, k), cx = lerp(UW/2, ix, k), cy = lerp(UH/2, iy, k), w = UW*s, h = lerp(UH*s, HOME.icon, k), r = lerp(54, HOME.icon*.225, k);
+    g.save(); rr(cx - w/2, cy - h/2, w, h, r); g.clip(); g.drawImage(snap, cx - w/2, cy - h/2, w, h); g.restore();
+  };
+  if (p < .38){
+    const k = ease(p/.38);
+    g.fillStyle = `rgba(0,0,0,${.45*(1-k)})`; g.fillRect(0, 0, UW, UH);
+    card(SNAP_A, iconPos('recents'), k);
+    g.fillStyle = 'rgba(255,255,255,.9)'; rr(UW/2 - 70, UH - 18 - lerp(0, 160, Math.sin(Math.min(1, k*1.4)*Math.PI/2))*(1 - k), 140, 7, 3.5); g.fill();
+  } else if (p > .55){
+    const k = ease((p - .55)/.45);
+    card(SNAP_B, iconPos('wear'), 1 - k);
+  }
+}
+function homeIndicator(dark){ ui.fillStyle = dark ? 'rgba(255,255,255,.9)' : 'rgba(20,20,22,.85)'; rr(UW/2 - 70, UH - 18, 140, 7, 3.5); ui.fill(); }
+
+let uiKey = '', lastKind = '';
 function renderUI(kind, p, now){
   const t = now/1000, secs = 252 + Math.floor(t)%600;
-  const k = kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*90)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : `t${Math.round(p*200)}`;
+  const k = kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*90)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind==='home' ? `h${Math.round(p*160)}` : `t${Math.round(p*200)}`;
   const kk = k + hhmm(clock.shown);
   if (kk === uiKey) return;
   uiKey = kk;
   ui.save();
+  // entering the transition (from either side): capture the two app screens it moves between
+  if (kind==='home' && lastKind !== 'home'){ snapshot(SNAP_A, () => { drawAsk(1, 0); homeIndicator(true); }); snapshot(SNAP_B, () => { drawPulse(0, t); homeIndicator(false); }); }
+  lastKind = kind;
   if (kind==='call') drawCall(p, secs, t);
   else if (kind==='transcript') drawTranscript(p);
   else if (kind==='ask') drawAsk(p, t);
+  else if (kind==='home') drawGoHome(p, t);
   else drawPulse(p, t);
+  if (kind !== 'home') homeIndicator(kind !== 'pulse');
   ui.restore();
   uiTex.needsUpdate = true;
 }
@@ -870,11 +959,11 @@ const PHONE_KEYS = [
   [4.0,  [0,0,0], [-.06,-.34,.05], 1],
   [4.15, [0,.02,0], [-.05,Math.PI-.45,-.04], 1],
   [4.43, [0,.02,0], [-.05,Math.PI-.38,-.03], 1],
-  [4.56, [.9,-.06,.3], [Math.PI/2 + .3, .12, Math.PI/2], 2.6],
+  [4.56, [.9,-.06,.3], [Math.PI/2 + .3, .12, Math.PI/2], 2.6, 'via'], // passed through, not stopped at
   [4.6, PROFILE_POS, PROFILE_ROT, PROFILE_S],
   [4.68, PROFILE_POS, PROFILE_ROT, PROFILE_S],
   [4.79, [0,0,0], [-.05,-.3,.03], 1],
-  [5.05, [0,0,0], [-.05,-.27,.03], 1],
+  [5.3, [0,0,0], [-.05,-.27,.03], 1], // holds while it goes home and opens Wear Close
   [5.6,  [-.55,.6,.3], [-.18,.3,.5], .6],
   [6.02, [-.55,.6,.3], [-.18,.3,.5], .6],
   [6.24, TAP_POS, TAP_ROT, .6],
@@ -884,13 +973,30 @@ const PHONE_KEYS = [
   [7.55, [-1.3,-3.0,-.4], [.6,.9,.9], .6]
 ];
 const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), ea = new THREE.Euler(), eb = new THREE.Euler();
+const qv = new THREE.Quaternion(), ev = new THREE.Euler(), q01 = new THREE.Quaternion(), q12 = new THREE.Quaternion();
+// Keys ease in and out of each other. A key marked 'via' is a waypoint: the move from the key before it to the key
+// after it is eased once as a whole and bends through the via point (quadratic Bezier / quaternion de Casteljau),
+// so the object never stops there.
 function pose(keys, st, obj){
   let i = 0; while (i < keys.length-2 && st >= keys[i+1][0]) i++;
-  const a = keys[i], b = keys[i+1], f = easeIO(clamp01((st-a[0])/(b[0]-a[0])));
-  obj.position.set(lerp(a[1][0],b[1][0],f), lerp(a[1][1],b[1][1],f), lerp(a[1][2],b[1][2],f));
+  let a = keys[i], b = keys[i+1], v = null;
+  if (b[4] === 'via' && keys[i+2]){ v = b; b = keys[i+2]; }
+  else if (a[4] === 'via' && i > 0){ v = a; a = keys[i-1]; }
+  const f = easeIO(clamp01((st-a[0])/(b[0]-a[0])));
   qa.setFromEuler(ea.set(...a[2])); qb.setFromEuler(eb.set(...b[2]));
-  obj.quaternion.slerpQuaternions(qa, qb, f);
-  obj.scale.setScalar(lerp(a[3],b[3],f));
+  if (!v){
+    obj.position.set(lerp(a[1][0],b[1][0],f), lerp(a[1][1],b[1][1],f), lerp(a[1][2],b[1][2],f));
+    obj.quaternion.slerpQuaternions(qa, qb, f);
+    obj.scale.setScalar(lerp(a[3],b[3],f));
+    return;
+  }
+  // control point chosen so the curve passes through the via point halfway
+  const bz = (p0, p1, p2) => { const c = 2*p1 - (p0 + p2)/2; return (1-f)*(1-f)*p0 + 2*(1-f)*f*c + f*f*p2; };
+  obj.position.set(bz(a[1][0],v[1][0],b[1][0]), bz(a[1][1],v[1][1],b[1][1]), bz(a[1][2],v[1][2],b[1][2]));
+  qv.setFromEuler(ev.set(...v[2]));
+  q01.slerpQuaternions(qa, qv, f); q12.slerpQuaternions(qv, qb, f);
+  obj.quaternion.slerpQuaternions(q01, q12, f);
+  obj.scale.setScalar(bz(a[3], v[3], b[3]));
 }
 const SNAP = 4.33, ARRIVE = 6.56;
 const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
@@ -968,7 +1074,8 @@ function updateStage(st, now){
   // screen content
   if (st < 4.7) renderUI('call', st >= SNAP ? on : 0, now);
   else if (st < 4.86) renderUI('transcript', smooth(4.72, 4.86, st), now);
-  else if (st < 5.3) renderUI('ask', clamp01((st-4.86)/.13), now);
+  else if (st < 5.02) renderUI('ask', clamp01((st-4.86)/.13), now);
+  else if (st < 5.3) renderUI('home', clamp01((st-5.02)/.26), now);
   else renderUI('pulse', st < 6.22 ? 0 : st < ARRIVE ? 1 : 2, now);
 
   // bracelets
