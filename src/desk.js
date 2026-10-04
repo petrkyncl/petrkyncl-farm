@@ -13,47 +13,6 @@ const lerp = (a,b,t) => a + (b-a)*t;
 const easeIO = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
 const easeIn = t => t*t*t;
 
-// Solid oak top, 170 × 74 cm: glued staves (each its own tone), cathedral grain that opens up along the stave,
-// fine medullary rays, the odd small knot. Drawn at ~12 px/mm so the grain still reads in close-ups.
-function oakTexture(){
-  const c = document.createElement('canvas'); c.width = 2048; c.height = 896;
-  const g = c.getContext('2d'), w = c.width, h = c.height;
-  let sd = 23; const r = () => (sd = (sd*16807) % 2147483647) / 2147483647;
-  const TONES = ['#c7a673','#bd9b68','#cfae7d','#c2a070','#b89368','#cba877','#c49f6e','#d2b283'];
-  const staves = 11, sh = h/staves;
-  for (let i=0;i<staves;i++){
-    const y0 = i*sh, tone = TONES[Math.floor(r()*TONES.length)];
-    g.fillStyle = tone; g.fillRect(0, y0, w, sh+1);
-    // slight tone drift along the stave
-    const lg = g.createLinearGradient(0, 0, w, 0); lg.addColorStop(0, `rgba(0,0,0,${.02+r()*.05})`); lg.addColorStop(.5, `rgba(255,255,255,${r()*.05})`); lg.addColorStop(1, `rgba(0,0,0,${.02+r()*.06})`);
-    g.fillStyle = lg; g.fillRect(0, y0, w, sh+1);
-    // grain: nested arcs (a cathedral) or straight lines, both long and wavy
-    g.save(); g.beginPath(); g.rect(0, y0, w, sh); g.clip();
-    const cathedral = r() > .45, cx = r()*w, cy = y0 + sh*(.2 + r()*.6), n = 34 + Math.floor(r()*26);
-    for (let k=0;k<n;k++){
-      const a = .05 + r()*.14, dark = r() > .3;
-      g.strokeStyle = dark ? `rgba(104,70,40,${a})` : `rgba(240,224,196,${a*.8})`;
-      g.lineWidth = .6 + r()*(dark ? 1.6 : 2.4);
-      g.beginPath();
-      if (cathedral){
-        const rx = 120 + k*(26 + r()*10), ry = (sh*.11)*(1 + k*.22);
-        g.ellipse(cx, cy, rx*2.2, ry, 0, 0, Math.PI*2);
-      } else {
-        const yy = y0 + r()*sh, amp = 1 + r()*5, f = .002 + r()*.004, ph = r()*6;
-        for (let x=0;x<=w;x+=12){ const y = yy + Math.sin(x*f+ph)*amp + Math.sin(x*f*2.7+ph*2)*amp*.3; x ? g.lineTo(x,y) : g.moveTo(x,y); }
-      }
-      g.stroke();
-    }
-    // medullary rays: short, faint, lighter flecks
-    for (let k=0;k<180;k++){ g.fillStyle = `rgba(245,232,205,${.05+r()*.1})`; g.fillRect(r()*w, y0 + r()*sh, 3 + r()*14, .8 + r()*1.2); }
-    g.restore();
-    // glue line between staves
-    g.fillStyle = 'rgba(90,64,38,.18)'; g.fillRect(0, y0 + sh - .4, w, .8);
-  }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
 // a block with 45° chamfers on every edge (straight bevel, one segment)
 function chamferedBox(w, h, d, ch){
   const shp = new THREE.Shape(); const x = w/2 - ch, y = h/2 - ch;
@@ -68,10 +27,44 @@ export function createDesk({ envTex, nameTex, stacked }){
   const scene = new THREE.Group(); root.add(scene);
 
   // ---------- desk: 4 cm solid oak top with chamfered edges; everything below the top stays in the dark ----------
-  const oak = oakTexture(); oak.repeat.set(1/17, 1/7.4);
-  const deskTopM = new THREE.MeshStandardMaterial({map:oak, roughness:.74, metalness:0, envMap:envTex, envMapIntensity:.1, fog:false}); // oiled oak: satin, no grazing-angle mirror
-  const deskTop = new THREE.Mesh(chamferedBox(17, 7.4, .4, .06), deskTopM);
-  deskTop.rotation.x = -Math.PI/2; deskTop.position.set(0, -.2, 0); scene.add(deskTop);
+  // Photo-scanned oak (Poly Haven "Oak Veneer 05", CC0) at true scale: one texture tile = 1 m = 10 units.
+  // The flat top is eight glued staves, each showing a different stretch of grain (offset, sometimes mirrored)
+  // and a slightly different tone, the way a real solid-oak top is built. The block underneath carries the
+  // chamfers and the sides.
+  const tl = new THREE.TextureLoader();
+  const oakTex = (f, srgb) => { const t = tl.load(`/textures/oak_veneer_05_${f}_2k.jpg`); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const oakMaps = { map: oakTex('diff', true), normalMap: oakTex('nor_gl'), roughnessMap: oakTex('rough') };
+  // the scan is a pale, low-contrast raw veneer; oiled oak is warmer and its grain darker, so the shader warms it
+  // and steepens the contrast of the grain
+  const oakMat = extra => {
+    // the scan's roughness map has broad cloudy patches that read as smears under a single spot, so the sheen is even
+    const m = new THREE.MeshStandardMaterial({ map: oakMaps.map, normalMap: oakMaps.normalMap, color: 0xf3d6ac, roughness: .66, metalness: 0, normalScale: new THREE.Vector2(1.1, 1.1), envMap: envTex, envMapIntensity: .1, fog: false, ...extra });
+    m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include map_fragment', `#include map_fragment
+      diffuseColor.rgb = pow(diffuseColor.rgb, vec3(1.55)) * 1.45;`); };
+    return m;
+  };
+  const blockMat = oakMat({}); // world UVs on the block are in units: scale them to metres
+  [oakMaps.map, oakMaps.normalMap, oakMaps.roughnessMap].forEach(t => t.repeat.set(.1, .1));
+  const DW = 17, DD = 7.4, DT = .4, CH = .06;
+  const deskTop = new THREE.Mesh(chamferedBox(DW, DD, DT, CH), blockMat);
+  deskTop.rotation.x = -Math.PI/2; deskTop.position.set(0, -DT/2, 0); scene.add(deskTop);
+  const staveMat = oakMat({ vertexColors: true });
+  const STAVES = 8, topW = DW - 2*CH, topD = DD - 2*CH, sw = topD/STAVES;
+  let sd = 19; const r = () => (sd = (sd*16807) % 2147483647) / 2147483647;
+  for (let i=0; i<STAVES; i++){
+    const g = new THREE.PlaneGeometry(topW, sw - .004, 1, 1);
+    const uv = g.attributes.uv, flip = r() > .5, u0 = r(), v0 = r();
+    for (let k=0; k<uv.count; k++){
+      // metres along the desk / across the stave, from a random place in the scan
+      const u = uv.getX(k)*topW/10 + u0, v = (flip ? 1 - uv.getY(k) : uv.getY(k))*sw/10 + v0;
+      uv.setXY(k, u, v);
+    }
+    const tone = .9 + r()*.16, warm = (r() - .5)*.06, col = [];
+    for (let k=0; k<uv.count; k++) col.push(tone + warm, tone, tone - warm);
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const st = new THREE.Mesh(g, staveMat);
+    st.rotation.x = -Math.PI/2; st.position.set(0, .0008, -topD/2 + sw*(i + .5)); scene.add(st);
+  }
 
   // soft contact shadow under the MacBook (no shadow maps needed)
   const contactTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
@@ -133,7 +126,7 @@ export function createDesk({ envTex, nameTex, stacked }){
 
   // ---------- light: one soft pool from above, a cool edge light from behind, the screen itself once it's on ----------
   const pool = new THREE.SpotLight(0xfff0dc, 0, 26, .42, 1, 1.6); pool.position.set(1.2, 10, 2.2); pool.target.position.set(.4, 0, 1.0); scene.add(pool, pool.target);
-  const edge = new THREE.DirectionalLight(0xbfd0ff, 0); edge.position.set(-3, 7, -6); edge.target.position.set(.5, 0, 1); scene.add(edge, edge.target);
+  const edge = new THREE.DirectionalLight(0xdfe6f5, 0); edge.position.set(-3, 7, -6); edge.target.position.set(.5, 0, 1); scene.add(edge, edge.target);
   const fill = new THREE.HemisphereLight(0x3a3f4a, 0x000000, 0); scene.add(fill);
   const glow = new THREE.PointLight(0x9fb4ff, 0, 7, 2); glow.position.set(.5, 1.4, .9); scene.add(glow);
   const POOL_NIGHT = new THREE.Color(0xfff0dc), POOL_DAY = new THREE.Color(0xfff6ea), POOL_GOLD = new THREE.Color(0xffc489);
