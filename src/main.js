@@ -1753,10 +1753,11 @@ const recTag = document.getElementById('recTag'), recTime = document.getElementB
 const dA = new THREE.Vector3(), dB = new THREE.Vector3();
 function toScreen(local, out){ out.copy(local); phone.localToWorld(out); out.project(camera); return [(out.x*.5+.5)*innerWidth, (-out.y*.5+.5)*innerHeight]; }
 // a dimension line drawn like a technical drawing: two ticks, a bar offset to the side, a label
-function dimension(el, pa, pb, label, sub){
+function dimension(el, pa, pb, label, sub, side = 1){
   const [x1,y1] = toScreen(pa, dA), [x2,y2] = toScreen(pb, dB);
-  const off = 26, bx = Math.max(x1,x2) + off;
-  el.innerHTML = `<line x1="${x1+6}" y1="${y1}" x2="${bx+6}" y2="${y1}"/><line x1="${x2+6}" y1="${y2}" x2="${bx+6}" y2="${y2}"/><line class="bar" x1="${bx}" y1="${y1}" x2="${bx}" y2="${y2}"/><text x="${bx+14}" y="${(y1+y2)/2+4}">${label}</text><text class="sub" x="${bx+14}" y="${(y1+y2)/2+20}">${sub}</text>`;
+  // side: 1 draws the bar and label to the right, -1 to the left (when the right edge is too close)
+  const off = 26, bx = side > 0 ? Math.max(x1,x2) + off : Math.min(x1,x2) - off, t = side > 0 ? bx + 14 : bx - 14, anchor = side > 0 ? 'start' : 'end';
+  el.innerHTML = `<line x1="${x1+6*side}" y1="${y1}" x2="${bx+6*side}" y2="${y1}"/><line x1="${x2+6*side}" y1="${y2}" x2="${bx+6*side}" y2="${y2}"/><line class="bar" x1="${bx}" y1="${y1}" x2="${bx}" y2="${y2}"/><text x="${t}" y="${(y1+y2)/2+4}" text-anchor="${anchor}">${label}</text><text class="sub" x="${t}" y="${(y1+y2)/2+20}" text-anchor="${anchor}">${sub}</text>`;
 }
 
 // The iPhone is part of the wall from the start: the one iPhone among the Androids, in a slot picked so that
@@ -1849,7 +1850,13 @@ function updateStage(st, now){
   const still = smooth(4.57, 4.6, st)*(1 - smooth(4.68, 4.71, st));
   if (!reduced && !inWall){ phone.position.y += Math.sin(t*1.1)*.018*(1-still); phone.rotation.z += Math.sin(t*.8)*.012*(1-still); }
   // on phones the stage is centred, so slide the lens-to-card stretch of the profile to the middle of the screen
-  if (isStacked()) phone.position.x += .5*still;
+  if (isStacked()){
+    // on a phone: frame the profile wider (both callouts have to fit the narrow screen) and centre the lens-to-card stretch
+    phone.scale.multiplyScalar(1 - .42*still); phone.position.x += -.08*still;
+    // and when its screen is the point (the transcript, Ask, Internát), the phone comes up bigger so it can be read
+    const read = smooth(4.72, 4.8, st)*(1 - smooth(5.03, 5.1, st)) + smooth(7.42, 7.56, st)*(1 - smooth(8.96, 9.06, st));
+    phone.scale.multiplyScalar(1 + .45*read); phone.position.y += .1*read;
+  }
 
   // card: glide in, hover, magnet pull (accelerating), snap, recording, then off it goes
   const glideK = smooth(CARD_IN, CARD_HOVER, st), pullK = clamp01((st - CARD_HOVER)/(SNAP - CARD_HOVER)), awayK = smooth(5.0, 5.32, st);
@@ -1882,6 +1889,7 @@ function updateStage(st, now){
     card.updateMatrix();
     const [lx, ly] = toScreen(new THREE.Vector3(CARD.w/2 - .06, CARD.h/2 - .06, -CARD.d/2).applyMatrix4(card.matrix), dA);
     recTag.style.transform = `translate(${lx.toFixed(1)}px,${ly.toFixed(1)}px)`;
+    recTag.classList.toggle('up', lx < 300); // not enough room on the left (a phone): the tag sits above the light
     const secs = Math.max(0, Math.floor(sinceSnap));
     recTime.textContent = `${Math.floor(secs/60)}:${String(secs % 60).padStart(2, '0')}`;
     recBars.forEach((b, i) => { b.style.transform = `scaleY(${(.15 + .85*(reduced ? .5 : VOICE(t - i*.07))).toFixed(3)})`; });
@@ -1893,7 +1901,7 @@ function updateStage(st, now){
     const ex = CARD.w/2 + .002, cy = ATTACH.y;
     const cyEnd = cy + CARD.h/2 - .05; // the card's end nearest the camera, so both stay in the close-up
     dimension(dimCard, new THREE.Vector3(ex, cyEnd, ph.backZ), new THREE.Vector3(ex, cyEnd, ph.backZ - CARD.d), '2.9 mm', 'Recents');
-    dimension(dimCam, new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.backZ), new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.lensTop), '4.2 mm', 'camera bump');
+    dimension(dimCam, new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.backZ), new THREE.Vector3(ph.lensEdge[0], ph.lensEdge[1], ph.lensTop), '4.2 mm', 'camera bump', isStacked() ? -1 : 1); // on a phone the two callouts point away from each other
   }
 
   // screen content
@@ -1959,7 +1967,16 @@ function placeStage(){
 }
 
 // ---------- intro desk (rides with the camera, like the stage) ----------
-const desk = createDesk({envTex, nameTex, stacked:isStacked});
+// the MacBook's screen is always landscape (its own 26 × 10 miniature wall), so it gets the wide name layout even on a phone
+const macNameC = document.createElement('canvas'); macNameC.width = Math.round(1024*(26*SX)/(10*SY)); macNameC.height = 1024;
+const macNameTex = new THREE.CanvasTexture(macNameC);
+function paintMacName(){
+  const g = macNameC.getContext('2d'), w = macNameC.width, h = macNameC.height;
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `900 ${Math.min(h*.5, w*.24)}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
+  g.fillText('PETR', w/2, h*.29); g.fillText('KYNČL', w/2, h*.71); macNameTex.needsUpdate = true;
+}
+const desk = createDesk({envTex, nameTex: macNameTex, stacked:isStacked});
 camera.add(desk.root);
 const flashEl = document.getElementById('flash');
 
@@ -1983,7 +2000,7 @@ createHead().then(h => { head = h; h.uniforms.uColor.value.multiplyScalar(1.12);
   headRig.add(h.group); h.group.visible = false; placeHead(); }).catch(e => console.warn('head', e));
 function placeHead(){
   const d = 3, halfH = d*Math.tan(THREE.MathUtils.degToRad(20)), halfW = halfH*camera.aspect;
-  if (isStacked()){ headRig.position.set(0, halfH*.52, -d); headRig.scale.setScalar(.78); }
+  if (isStacked()){ headRig.position.set(0, halfH*.66, -d); headRig.scale.setScalar(.6); } // above the copy, clear of the title
   else { headRig.position.set(halfW*.38, .02, -d); headRig.scale.setScalar(1.3); }
 }
 function updateHead(st, t){
@@ -2198,7 +2215,7 @@ const writing = secs.map(sec => {
   const chars = [], stops = []; // stops[k]: the char index at which paragraph k starts, in "typed" units
   let t = 0;
   if (sec.id === 'c0') return { sec, chars: [], total: 0, cur: null, shown: -1, lastMove: 0 }; // the opening line is simply there
-  sec.querySelectorAll('.copy > p:not(.foot)').forEach((p, pi) => {
+  sec.querySelectorAll('.copy > p:not(.foot):not(.big)').forEach((p, pi) => {
     if (pi) t += PARA_PAUSE;
     const walk = node => [...node.childNodes].forEach(n => {
       if (n.nodeType === 3){
@@ -2323,7 +2340,7 @@ document.getElementById('copy')?.addEventListener('click', () => {
 const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
 // the automation mix, chosen per phone exactly like the shader does (hash of its seed)
 const mixJob = i => ['whatsapp · typing a reply','telegram · sending 3/12','instagram · liking the feed','tiktok · watching, liking'][aApp[i]];
-const progEl = document.querySelector('#progress i'), scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
+const veilEl = document.querySelector('.veil'), copies = secs.map(s => s.querySelector('.copy')), progEl = document.querySelector('#progress i'), scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
 const rPhones = reel(sPhones), rTaps = reel(sTaps), rHands = reel(document.getElementById('sHands')), rJobs = reel(document.getElementById('hJobs'));
@@ -2340,7 +2357,7 @@ const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:
 // The wall spells out the milestone itself big (wall: '\\n' breaks the rows), the number that matters (note) under it,
 // and the date smallest and dimmer at the bottom.
 const MILESTONES = [
-  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, about $1,000.', wall:'FIVERR', note:'31 ORDERS' },
+  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders.', wall:'FIVERR', note:'31 ORDERS' },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:'TASKER\nPROJECTS' },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:'MATIONX' },
   { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ' },
@@ -2392,6 +2409,13 @@ function frame(now){
   sy += (scrollY - sy)*(reduced ? 1 : .085);
   const {prog, st} = storyAt(sy);
   updateWriting(sy, now);
+  if (!land){
+    const cur = Math.floor(st/2), within = st - 2*cur;
+    // the darkened bottom reaches a little above wherever the current copy starts (long copy, taller shade)
+    const top = copies[cur]?.getBoundingClientRect().top ?? innerHeight*.4;
+    veilEl.style.height = `${Math.round(Math.min(innerHeight, Math.max(innerHeight*.5, innerHeight - top + 90)))}px`;
+    copies.forEach((c, i) => { const o = i === cur ? 1 - smooth(1.0, 1.32, within) : i === cur + 1 ? smooth(1.55, 1.95, within) : i === cur - 1 ? 0 : 1; c.style.opacity = o.toFixed(3); });
+  }
   // chapter 0 is the desk; the wall's own chapters start at 1
   const wp = Math.max(0, prog-1);
   let a = Math.floor(wp), f = wp-a; if (a>=S-1){ a=S-2; f=1; }
@@ -2599,7 +2623,7 @@ setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); d
 const start = () => {
   fitLockup();
   ld.fonts = 1; paintLoader(); finishLoader();
-  paintName(); drawNotif(); measure();
+  paintName(); paintMacName(); drawNotif(); measure();
   if (SHOT){ scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
   requestAnimationFrame(frame);
 };

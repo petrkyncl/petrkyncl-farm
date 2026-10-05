@@ -197,15 +197,17 @@ export function createDesk({ envTex, nameTex, stacked }){
   // rolled level with the screen), then travels down that axis into the screen. No zooming in from an angle.
   // A: low over the desk, the oak running away in the foreground, the MacBook a dark silhouette against the bokeh.
   const shots = () => stacked() ? {
-    A: [new THREE.Vector3(1.6, 1.5, 13.5), new THREE.Vector3(.5, -.9, .6)],
-    // phones: the copy covers the lower half, so the camera aims below the MacBook to lift it into the top half
-    B: [new THREE.Vector3(.9, 4.4, 10.5), new THREE.Vector3(.5, -1.2, 1.3)]
+    A: [new THREE.Vector3(1.4, 1.6, 15.5), new THREE.Vector3(.5, -1.1, .8)],
+    // phones: the copy covers the lower half, so the camera aims below the MacBook to lift it into the top half, and
+    // stands back far enough that the whole MacBook fits the narrow frame
+    B: [new THREE.Vector3(.7, 5.4, 13.5), new THREE.Vector3(.5, -1.5, 1.3)]
   } : {
     A: [new THREE.Vector3(3.9, .72, 6.4), new THREE.Vector3(-.9, .35, .3)],
     B: [new THREE.Vector3(1.7, 2.6, 5.4), new THREE.Vector3(.4, .8, 1.0)]
   };
   const SCREEN_U = new THREE.Vector3(0, .926, -.376).applyAxisAngle(Y, mac.rotation.y);
-  const AXIS_FAR = SCREEN_C.clone().addScaledVector(SCREEN_N, 4.0);
+  // on a phone the MacBook has to fit the narrow frame on its way in, so the point on the screen's axis sits further out
+  const axisFar = () => SCREEN_C.clone().addScaledVector(SCREEN_N, stacked() ? 9.5 : 4.0);
   const eye = new THREE.Vector3(), tgt = new THREE.Vector3(), up = new THREE.Vector3(0,1,0), WORLD_UP = new THREE.Vector3(0,1,0), vcam = new THREE.Matrix4();
   let camKey = '', eyeC = null, tgtC = null;
 
@@ -243,7 +245,7 @@ export function createDesk({ envTex, nameTex, stacked }){
     const key = stacked() ? 'm' : 'd';
     if (camKey !== key){
       camKey = key;
-      eyeC = new THREE.CatmullRomCurve3([S.A[0], S.B[0], AXIS_FAR, C_EYE], false, 'centripetal');
+      eyeC = new THREE.CatmullRomCurve3([S.A[0], S.B[0], axisFar(), C_EYE], false, 'centripetal');
       tgtC = new THREE.CatmullRomCurve3([S.A[1], S.B[1], SCREEN_C.clone().addScaledVector(SCREEN_N, -.5), SCREEN_C.clone().addScaledVector(SCREEN_N, -1)], false, 'centripetal');
     }
     const s01 = clamp01(st), uu = s01 < .25 ? 2*s01*s01 : s01 - .125; // ease-in, then constant speed

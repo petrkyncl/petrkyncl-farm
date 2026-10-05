@@ -95,8 +95,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 
 @media (max-width:1023px), (max-aspect-ratio:23/20){
   .pin{align-items:flex-end;padding-bottom:80px}
-  .copy{background:linear-gradient(to top,var(--room) 60%,transparent);padding-top:56px;max-width:none}
-  .veil,.nav,.scroll{display:none}
+  /* no box behind the text: the bottom of the screen is darkened in place (it doesn't travel with the copy), the copy
+     carries a soft shadow, and the outgoing chapter's copy fades as it leaves (main.js) */
+  .copy{max-width:none;text-shadow:0 1px 14px rgba(5,6,10,.9),0 0 2px rgba(5,6,10,.6)}
+  .veil{display:block;inset:auto 0 0 0;width:auto;height:62%;background:linear-gradient(to top,var(--room) 0%,color-mix(in srgb,var(--room) 90%,transparent) 55%,color-mix(in srgb,var(--room) 55%,transparent) 80%,transparent);transition:height .4s ease}
+  .nav,.scroll{display:none}
   .hud span{display:none}
 }
 @media (prefers-reduced-motion:reduce){body,a,button{cursor:auto}#cross{display:none}.hud i{animation:none}}
@@ -153,3 +156,5 @@ html{scrollbar-width:none}
 html::-webkit-scrollbar{display:none}
 #progress{position:fixed;right:0;top:0;bottom:0;width:2px;z-index:6;pointer-events:none;background:rgba(238,240,246,.06)}
 #progress i{display:block;width:100%;height:100%;background:var(--amber);box-shadow:0 0 8px var(--amber);transform:scaleY(0);transform-origin:top}
+#recTag.up .lead{right:auto;left:0;top:-52px;width:1px;height:46px;background:linear-gradient(to top,var(--amber),rgba(255,181,71,.3))}
+#recTag.up .txt{right:auto;left:0;top:-74px;transform:translateX(-50%)}
