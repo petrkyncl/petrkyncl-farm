@@ -1915,11 +1915,12 @@ composer.addPass(new OutputPass());
 const HEAD_ST = 17.35; // story time it starts assembling (the move into the last chapter)
 const headRig = new THREE.Group(); camera.add(headRig);
 let head = null;
-createHead().then(h => { head = h; headRig.add(h.group); h.group.visible = false; placeHead(); }).catch(e => console.warn('head', e));
+createHead().then(h => { head = h; h.uniforms.uColor.value.multiplyScalar(1.7); // the site's tone mapping and high bloom threshold eat more light than the lab
+  headRig.add(h.group); h.group.visible = false; placeHead(); }).catch(e => console.warn('head', e));
 function placeHead(){
   const d = 3, halfH = d*Math.tan(THREE.MathUtils.degToRad(20)), halfW = halfH*camera.aspect;
-  if (isStacked()){ headRig.position.set(0, halfH*.55, -d); headRig.scale.setScalar(.9); }
-  else { headRig.position.set(halfW*.36, -.06, -d); headRig.scale.setScalar(1.75); }
+  if (isStacked()){ headRig.position.set(0, halfH*.52, -d); headRig.scale.setScalar(.78); }
+  else { headRig.position.set(halfW*.38, .02, -d); headRig.scale.setScalar(1.3); }
 }
 function updateHead(st, t){
   if (!head) return 0;
@@ -1927,10 +1928,11 @@ function updateHead(st, t){
   head.group.visible = k > 0;
   if (!k) return 0;
   const u = head.uniforms;
-  u.uIn.value = k; u.uTime.value = t;
+  u.uIn.value = k; u.uTime.value = t; u.uSize.value = headRig.scale.x; // dot sizes are in the head's units, so they scale with it
   u.uPx.value = renderer.domElement.height/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
   u.uScan.value = .55 - ((t*.16) % 2.4);
-  head.group.rotation.set(-pmy*.12, pmx*.32 + Math.sin(t*.3)*.05, 0);
+  // three-quarters, looking towards the copy; it turns that way as it assembles, then follows the cursor a little
+  head.group.rotation.set(-pmy*.12, -.6 - (1 - k)*.9 + pmx*.4 + Math.sin(t*.3)*.05, 0);
   return k;
 }
 function size(){
@@ -2349,7 +2351,7 @@ function frame(now){
   updateSlot(stageT);
   updateStage(stageT, now);
   const headK = updateHead(st, now/1000);
-  if (headK > 0){ uniforms.uDim.value = Math.max(uniforms.uDim.value, headK); uniforms.uGain.value *= 1 - .6*headK; } // the wall steps back behind him
+  if (headK > 0){ uniforms.uDim.value = Math.max(uniforms.uDim.value, headK); uniforms.uGain.value *= 1 - .75*headK; } // the wall steps back behind him
 
   // hover via raycast (off while the stage owns the frame)
   let h = -1;

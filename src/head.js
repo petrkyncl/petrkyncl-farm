@@ -1,10 +1,10 @@
-// Petr's head as a cloud of dots: a hex lattice laid over his profile photo, pushed out by a depth map
-// (Depth Anything V2 on the photo, see public/media/head.bin: Float32 [x, y, z, lum, nx, ny, nz] per dot, 1 unit = photo height).
-// Dot size follows the photo's brightness, so the face reads like a halftone that has depth: turn it and the nose,
-// cheek and ear move against each other.
+// Petr's head as a cloud of dots, from a phone scan of his head (a textured mesh): dots spread evenly over its surface
+// (Poisson disk, see public/media/head.bin: Float32 [x, y, z, lum, nx, ny, nz] per dot, the head centred, crown to chin
+// ≈ 0.62). Dot size follows the scan's brightness, so the face reads like a halftone with real depth; dots on the far
+// side fade by their normal, so it can turn all the way round.
 import * as THREE from 'three';
 
-export async function createHead(url = '/media/head.bin'){
+export async function createHead(url = '/media/head.bin', { spacing = .0052 } = {}){
   const buf = await (await fetch(url, { cache: 'no-cache' })).arrayBuffer(); // always revalidate: the data gets regenerated
   const S = 7, a = new Float32Array(buf), n = a.length/S;
   const pos = new Float32Array(n*3), nrm = new Float32Array(n*3), lum = new Float32Array(n), seed = new Float32Array(n);
@@ -19,14 +19,14 @@ export async function createHead(url = '/media/head.bin'){
   geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
   geo.computeBoundingSphere();
   const uniforms = {
-    uTime: { value: 0 }, uIn: { value: 1 }, uPx: { value: 600 }, uSize: { value: 1 }, uFade: { value: new THREE.Vector2(-.24, -.36) },
-    uColor: { value: new THREE.Color(.82, .9, 1.0) }, uScan: { value: -9 }
+    uTime: { value: 0 }, uIn: { value: 1 }, uPx: { value: 600 }, uSize: { value: 1 }, uFade: { value: new THREE.Vector2(-.44, -.6) },
+    uColor: { value: new THREE.Color(.82, .9, 1.0) }, uScan: { value: -9 }, uSpacing: { value: spacing }
   };
   const mat = new THREE.ShaderMaterial({
     uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: `
       attribute float aLum, aSeed;
-      uniform float uTime, uIn, uPx, uSize, uScan; uniform vec2 uFade;
+      uniform float uTime, uIn, uPx, uSize, uScan, uSpacing; uniform vec2 uFade;
       varying float vA, vScan;
       float hash(float n){ return fract(sin(n*91.7)*43758.5); }
       void main(){
@@ -40,16 +40,19 @@ export async function createHead(url = '/media/head.bin'){
         vec4 mv = modelViewMatrix*vec4(p, 1.0);
         gl_Position = projectionMatrix*mv;
         // bright skin = big dots, shadow = small ones; the neck and shirt fade out under the jaw
-        float l = smoothstep(.12, .92, aLum);
+        // the scan's own brightness, lit again by one soft key from the upper left so the form reads
+        vec3 nv = normalize(normalMatrix*normal);
+        float key = max(dot(nv, normalize(vec3(-.55, .45, .7))), 0.0);
+        float l = smoothstep(.04, .7, aLum)*(.28 + .95*key);
         float fade = smoothstep(uFade.y, uFade.x, position.y);
         vScan = exp(-pow((position.y - uScan)*10.0, 2.0)); // a soft band of light passing down, now and then
-        // diameter in world units: the lattice spacing is 8.6 px of a 2000 px photo (.0043); the brightest dots fill
-        // about 80% of it, the darkest a fifth (uPx = viewport height / (2 tan(fov/2)), so world → pixels)
-        float sz = .0043*(.26 + .62*l + .06*vScan)*uSize;
+        // diameter in world units, against the dot spacing: the brightest dots fill most of it, the darkest a quarter
+        // (uPx = viewport height / (2 tan(fov/2)), so world → pixels)
+        float sz = uSpacing*(.16 + .5*l + .06*vScan)*uSize;
         gl_PointSize = max(1.0, sz*uPx/ -mv.z);
         // dots on a surface turned away from you fade, so the silhouette doesn't pile up into a bright rim
-        float facing = normalize(normalMatrix*normal).z;
-        vA = (.45 + .75*l)*fade*k*smoothstep(-.1, .55, facing);
+        float facing = nv.z;
+        vA = (.3 + .7*l)*fade*k*smoothstep(-.05, .45, facing);
       }`,
     fragmentShader: `
       uniform vec3 uColor; varying float vA, vScan;
@@ -61,7 +64,7 @@ export async function createHead(url = '/media/head.bin'){
       }`
   });
   const points = new THREE.Points(geo, mat);
-  // pivot near the middle of the skull so turning feels like a head turning
-  const pivot = new THREE.Group(); points.position.set(.01, -.04, -.26); pivot.add(points);
+  // the data is centred on the skull, so turning it feels like a head turning
+  const pivot = new THREE.Group(); pivot.add(points);
   return { group: pivot, points, uniforms, count: n };
 }

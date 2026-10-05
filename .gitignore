@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.local
 finishes-preview.png
+
+# raw scans stay local; only the derived dots ship
+public/models/_*

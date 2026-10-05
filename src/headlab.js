@@ -30,7 +30,7 @@ function frame(now){
   if (!q.has('in')) head.uniforms.uIn.value = Math.min(1, t/2.2);
   head.uniforms.uPx.value = renderer.domElement.height/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
   head.uniforms.uScan.value = .55 - ((t*.22) % 1.6);
-  const ty = fixedYaw ?? mx*.45 + Math.sin(t*.3)*.06, tp = fixedYaw !== null ? 0 : my*.18;
+  const ty = fixedYaw ?? mx*1.2 + Math.sin(t*.3)*.06, tp = fixedYaw !== null ? 0 : my*.18;
   yaw += (ty - yaw)*.06; pitch += (tp - pitch)*.06;
   head.group.rotation.set(pitch, yaw, 0);
   composer.render();
