@@ -7,7 +7,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rrShape, slab, flat, faceBack } from './shapes.js';
 import { createDesk } from './desk.js';
 import { reel } from './reels.js';
-import { createPhone, createCard, outlineGeometry, loadIphone, paint, clampHDR, DEEP_BLUE_NIGHT, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
+import { makeStrap, STRAP } from './bracelet.js';
+import { createPhone, createCard, outlineGeometry, loadIphone, paint, clampHDR, envLit, DEEP_BLUE_NIGHT, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import './style.css';
@@ -355,16 +356,16 @@ const screenMat = new THREE.ShaderMaterial({
           c += fillD(length(q-vec2(.11,y))-.028,.01)*step(.02,k)*mix(.3,.9,who);
         }
       } else {
-        // Wear Close: two bracelets, a heart travels from one to the other, then the notification lands
+        // Wear Close: two strap bracelets, a heart travels from one to the other, then the notification lands
         vec2 A = vec2(.5,.5), B = vec2(.5,1.36);
         float k = fract(t*.22 + s);
         for (int j=0;j<2;j++){
           vec2 P = j==0 ? A : B;
-          float e1 = abs(length((q-P-vec2(0.0,.022))*vec2(1.0,1.7))-.24)-.011;
-          float e2 = abs(length((q-P+vec2(0.0,.022))*vec2(1.0,1.7))-.24)-.011;
+          // a flat strap seen from the front: one band, the keeper loop at the back, the node in front
+          float e = abs(length((q-P)*vec2(1.0,1.7))-.24)-.024;
           float front = step(q.y, P.y);
-          c += fillD(min(e1,e2),.01)*mix(.38,.85,front);
-          c += fillD(sdBox(q-P-vec2(0.0,.141),vec2(.026,.03),.012),.01)*.7;
+          c += fillD(e,.01)*mix(.34,.8,front);
+          c += fillD(sdBox(q-P-vec2(-.07,.136),vec2(.016,.036),.006),.01)*.55;
           float nd = sdBox(q-P+vec2(0.0,.141),vec2(.062,.056),.022);
           c = mix(c, j==0 ? .95 : .18, fillD(nd,.01));
           c += fillD(abs(nd)-.008,.008)*.9;
@@ -787,11 +788,14 @@ loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
   if (oled){
     // the model's screen UVs run right to left and use glTF's flipY = false
     uiTex.flipY = false; uiTex.repeat.x = -1; uiTex.offset.x = 1; uiTex.needsUpdate = true;
-    oled.map = uiTex; oled.emissiveMap = uiTex; oled.emissive.setHex(0xffffff); oled.emissiveIntensity = .5; oled.color.setHex(0x000000); oled.needsUpdate = true;
+    oled.map = uiTex; oled.emissiveMap = uiTex; oled.emissive.setHex(0xffffff); oled.emissiveIntensity = .82; oled.color.setHex(0x000000); oled.needsUpdate = true;
   }
-  // the front cover glass is near-mirror; tone its highlight down so the bloom doesn't flare
-  if (mats['Glass']){ mats['Glass'].roughness = .16; mats['Glass'].envMapIntensity = .35; }
-  if (oled){ oled.roughness = .42; oled.envMapIntensity = .15; }
+  // The screen must read as a lit OLED under clear glass, not a frosted panel: the cover glass keeps the model's
+  // mirror finish (a rougher one smears the softboxes across the whole display like a flashlight on nano-texture),
+  // reflects only the environment (no flash from the product light), and faintly; the OLED itself reflects nothing
+  // and shines at close to full brightness, so the colours stay saturated.
+  if (mats['Glass']){ mats['Glass'].roughness = .03; mats['Glass'].envMapIntensity = .22; envLit(mats['Glass'], 0); }
+  if (oled){ oled.roughness = .6; oled.envMapIntensity = 0; envLit(oled, 0); }
   // the island is one black pill: its cut-out walls and the front sensors behind it must not catch light
   if (mats['OLED off']){ mats['OLED off'].color.setHex(0x000000); mats['OLED off'].roughness = .5; mats['OLED off'].envMapIntensity = 0; }
   if (mats['Camera filter']){ mats['Camera filter'].color.setHex(0x030305); mats['Camera filter'].envMapIntensity = .15; }
@@ -805,33 +809,15 @@ const soundRings = [0,1,2].map(() => {
   r.position.set(ATTACH.x, ATTACH.y, ph.backZ - .0015); phone.add(r); return r;
 });
 
-// ---------- Wear Close bracelets (A2: double cord, square NFC node in front, slider at the back) ----------
+// ---------- Wear Close bracelets (C3: a leather strap with a pin-and-hole fastening, see bracelet.js) ----------
 const BS = 1.3; // bracelets read better a touch larger than life next to the phone
-function makeBracelet(stone){
-  const g = new THREE.Group();
-  const cord = new THREE.MeshStandardMaterial({color: stone?0xb3a48c:0x2c2c2f, roughness:.95, metalness:0, envMap:envTex, envMapIntensity:.5});
-  const capM = new THREE.MeshPhysicalMaterial({color: stone?0xc9bfae:0x242427, roughness:.34, clearcoat:.7, clearcoatRoughness:.3, envMap:envTex, envMapIntensity:.45});
-  const bezM = new THREE.MeshStandardMaterial({color: stone?0xc99a74:0x5c5d62, metalness:1, roughness:.28, envMap:envTex, envMapIntensity:.7, emissive:0x000000});
-  const RX=.31, RZ=.29, rr=.0165, off=.023;
-  for (const o of [-off, off]){
-    const pts = []; for (let i=0;i<96;i++){ const a=i/96*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(a)*RX, o, Math.sin(a)*RZ)); }
-    g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 220, rr, 14, true), cord));
-  }
-  const node = new THREE.Mesh(slab(.15,.15,.052,.046,.013), [capM, bezM]); node.position.set(0,0,RZ+.024); g.add(node);
-  const slider = new THREE.Mesh(slab(.075,.075,.056,.026,.012), [bezM, bezM]); slider.position.set(0,0,-RZ-.014); g.add(slider);
-  for (const k of [-1,1]){
-    const tail = new THREE.Mesh(new THREE.CylinderGeometry(rr,rr,.11,12), cord); tail.rotation.z = Math.PI/2; tail.rotation.y = k*.35; tail.position.set(k*.085, 0, -RZ-.05); g.add(tail);
-    const tip = new THREE.Mesh(new THREE.CylinderGeometry(rr*1.3,rr*1.3,.034,18), bezM); tip.rotation.z = Math.PI/2; tip.rotation.y = k*.35; tip.position.set(k*.15, 0, -RZ-.073); g.add(tip);
-  }
-  g.rotation.x = .42; g.scale.setScalar(BS);
-  return {g, node, bezM, capM};
-}
+function makeBracelet(isStone){ const b = makeStrap(isStone, envTex); b.g.rotation.x = .42; b.g.scale.setScalar(BS); return b; }
 const stone = makeBracelet(true), charcoal = makeBracelet(false);
 stage.add(stone.g, charcoal.g);
 const STONE_AT = new THREE.Vector3(-.02,-.46,.12), CHAR_AT = new THREE.Vector3(.95,.16,-.4);
 
 // node positions at rest, in stage space (for ripples, the pulse arc and the phone tap)
-const nodeAt = (b, at) => new THREE.Vector3(0,0,(.29+.05)*BS).applyEuler(b.g.rotation).add(at);
+const nodeAt = (b, at) => b.node.position.clone().add(new THREE.Vector3(0, 0, STRAP.NODE_D/2)).multiplyScalar(BS).applyEuler(b.g.rotation).add(at);
 const STONE_NODE = nodeAt(stone, STONE_AT), CHAR_NODE = nodeAt(charcoal, CHAR_AT);
 
 const ripples = [0,1,2].map(() => { const m = new THREE.Mesh(new THREE.RingGeometry(.94,1,72), new THREE.MeshBasicMaterial({color:new THREE.Color(1.8,1.4,1.1), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false})); m.position.copy(STONE_NODE); stage.add(m); return m; });
