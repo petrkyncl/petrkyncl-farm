@@ -153,7 +153,7 @@ const REELS = [
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
-    { src:'ivo',   full:true, fx:.1, ax:.155, fy:.5 }, // Petr's crop, edge to edge: Ivo starts just right of the copy, the lectern, my hand on it
+    { src:'ivo',   full:true, fx:.19, ax:.155, fy:.5 }, // Petr's crop, edge to edge: Ivo starts just right of the copy, the lectern, my hand on it
     { src:'kate',  full:true, fx:.47, fy:.4 },
     { src:'prize', full:true, fx:.55, fy:.4 },
     { src:'group', full:true, contain:true, me:true }
@@ -241,7 +241,7 @@ const uniforms = {
   uHover:{value:-1}, uBoot:{value:reduced?1.1:0}, uGrid:{value:new THREE.Vector2(C,R)},
   uName:{value:nameTex}, uFace:{value:faceTex}, uFaceColor:{value:1}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
   uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0},
-  uNewId:{value:-1}, uNewOn:{value:1},
+  uNewId:{value:-1}, uNewOn:{value:1}, uFaceSat:{value:.28},
   uOne:{value:0}, uPickOn:{value:0}, uPickId:{value:PICK.i}, uPickCell:{value:new THREE.Vector2(PICK.c, PICK.r)}, uPick:{value:pickTex}
 };
 
@@ -258,7 +258,7 @@ const screenMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader:`
     uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe, uFaceColor;
-    uniform float uOne, uPickOn, uPickId, uNewId, uNewOn; uniform vec2 uPickCell;
+    uniform float uOne, uPickOn, uPickId, uNewId, uNewOn, uFaceSat; uniform vec2 uPickCell;
     uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB, uPick; uniform vec3 uRoom;
     varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
     const float ASP = ${(SH/SW).toFixed(4)};
@@ -660,7 +660,11 @@ const screenMat = new THREE.ShaderMaterial({
       vec3 bg = vec3(.028,.036,.058);
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
       vec3 ac = typ > 6.5 ? automation(q, t, vSeed) : ((typ > 2.5 && typ < 3.5) ? chatApp(q, t, vSeed, 0.0) : bg + (ink-bg)*a);
-      vec3 imgCol = mix(bg + (ink-bg)*img*1.05, mix(bg, fc*.92, grid), useFc);
+      // every photo and the video on the wall share one grade: mostly grey, a cool cast like the wall's ink, a little
+      // more contrast (only the one lit phone at school keeps its colour, see below)
+      float fl2 = (dot(fc, vec3(.299,.587,.114)) - .5)*1.12 + .47;
+      vec3 fcg = mix(fl2*vec3(.9,.96,1.06), fc, uFaceSat);
+      vec3 imgCol = mix(bg + (ink-bg)*img*1.05, mix(bg, fcg*.92, grid), useFc);
       if (mode > 2.5){
         // letters, then the wall goes dark from the outside in until one phone is left: each one squeezes to a
         // bright line and out, like an old screen switching off. The last one turns into me.
@@ -2217,7 +2221,7 @@ function grade(im, sat){
   }
   g.putImageData(d, 0, 0); return c;
 }
-const GRADE = { school: .28, director: .28, group: .28 }; // the group photo closes the hackathon in the same grey as the school
+const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so the pitch video gets the same look
 ['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
 let videoOn = false;
 { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
