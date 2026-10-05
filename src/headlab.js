@@ -32,7 +32,7 @@ function frame(now){
   head.uniforms.uScan.value = .55 - ((t*.22) % 1.6);
   const ty = fixedYaw ?? mx*1.2 + Math.sin(t*.3)*.06, tp = fixedYaw !== null ? 0 : my*.18;
   yaw += (ty - yaw)*.06; pitch += (tp - pitch)*.06;
-  head.group.rotation.set(pitch, yaw, 0);
+  head.group.rotation.set(q.has('pitch') ? +q.get('pitch') : pitch, yaw, 0);
   composer.render();
   requestAnimationFrame(frame);
 }
