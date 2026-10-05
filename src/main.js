@@ -206,8 +206,11 @@ function paintReel(reel, st){
   const isVideo = i => reel.items[i].src === 'video';
   // repaint only what changed (the video every frame it's on)
   if (reelShown.reel !== reel || reelShown.a !== k || isVideo(k)){ drawReelItem(reel.items[k], faceG); faceTex.needsUpdate = true; }
-  if (next !== k && (reelShown.reel !== reel || reelShown.b !== next || isVideo(next))){ drawReelItem(reel.items[next], faceG2); faceTex2.needsUpdate = true; }
-  reelShown.reel = reel; reelShown.a = k; reelShown.b = next;
+  // the next item is only remembered as painted when it really was (at a reel's last item there is no next, and the
+  // canvas still holds whatever the other reel left in it: scrolling back must not flip to that)
+  if (next !== k && (reelShown.reel !== reel || reelShown.b !== next || isVideo(next))){ drawReelItem(reel.items[next], faceG2); faceTex2.needsUpdate = true; reelShown.b = next; }
+  else if (next === k) reelShown.b = -1;
+  reelShown.reel = reel; reelShown.a = k;
   uniforms.uReelF.value = f;
   return (f > .5 ? next : k);
 }
@@ -2257,7 +2260,8 @@ const S = 9; // wall chapters
 // camera keeps drifting a little (MationX the most), during a transition it travels to the next chapter.
 // The school drifts all the way to its push-in, but only once the letters are up.
 const HOLD_DRIFT = { 2: .4, 5: .12, 7: .45 };
-const HOLD_EASE = { 7: h => smooth(.74, .99, h) };
+// the push-in starts slowly as the first letter phones go out (IRIS_AT is .6 into the hold) and lands on the last one
+const HOLD_EASE = { 7: h => smooth(.58, .97, h) };
 function wallCam(st){
   const sec = Math.floor(st/2), within = st - 2*sec;
   if (sec < 1) return 0;
@@ -2285,7 +2289,7 @@ addEventListener('pointermove', e => {
 document.addEventListener('mouseleave', () => ndc.set(9,9));
 addEventListener('pointerdown', e => { if (e.pointerType!=='mouse'){ ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1); tapUntil = performance.now()+2200; } }, {passive:true});
 
-document.getElementById('copy').addEventListener('click', () => {
+document.getElementById('copy')?.addEventListener('click', () => {
   const t = document.getElementById('mailtxt').textContent, b = document.getElementById('copy');
   const done = () => { b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1600); };
   if (navigator.clipboard) navigator.clipboard.writeText(t).then(done).catch(()=>getSelection().selectAllChildren(document.getElementById('mailtxt')));
@@ -2534,7 +2538,7 @@ const fontsReady = document.fonts && document.fonts.load
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
-if (SHOT){ window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; } // for headless checks
+if (SHOT){ window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; window.__goSt = st => scrollTo(0, scrollForSt(st)); } // for headless checks
 function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
   return into <= 1 ? tops[i] + into*hold : tops[i] + hold + (into-1)*innerHeight;
@@ -2552,11 +2556,8 @@ function paintLoader(){
 function finishLoader(){
   if (ld.done || !ld.fonts || ld.items < ld.total) return;
   ld.done = true;
-  // let the domains flash for a moment at least, settle on the one you're on, hold it, then lift and let the desk light come up
-  setTimeout(() => {
-    window.__ldSettle?.();
-    setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, 700);
-  }, Math.max(0, 1700 - (performance.now() - ld.t0)));
+  // let the domains roll for a moment at least (they keep rolling as it fades), then lift and let the desk light come up
+  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, Math.max(0, 1400 - (performance.now() - ld.t0)));
 }
 setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } }, 9000);
 

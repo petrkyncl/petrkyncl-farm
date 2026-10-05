@@ -70,8 +70,6 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .reach a:hover,.reach a:focus-visible{background-size:100% 1px,100% 1px}
 .mailrow{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
 .reach .mail{font-weight:300;font-size:clamp(20px,1.9vw,28px);letter-spacing:.01em}
-#copy{font:inherit;font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);background:none;border:0;padding:0;cursor:pointer;transition:color .2s}
-#copy:hover,#copy:focus-visible{color:var(--amber)}
 .sites{display:flex;flex-wrap:wrap;gap:8px 20px}
 
 .hud{position:fixed;left:clamp(16px,5vw,72px);bottom:18px;z-index:4;font-size:9px;font-weight:200;letter-spacing:.3em;color:var(--dim);display:flex;gap:26px;align-items:center;font-variant-numeric:tabular-nums;pointer-events:none;text-transform:uppercase}

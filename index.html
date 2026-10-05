@@ -16,30 +16,18 @@ html,body{background:#06070a;margin:0}
 #loader .ld-bar{width:160px;height:1px;background:rgba(238,240,246,.12);overflow:hidden}
 #loader .ld-bar i{display:block;height:100%;width:100%;background:#ffb547;box-shadow:0 0 8px #ffb547;transform:scaleX(0);transform-origin:left;transition:transform .35s ease}
 #loader.done{opacity:0;visibility:hidden}
-/* the domains flash by while it loads, then it settles on the one you're on */
-#loader .ld-dom{font:300 clamp(30px,6vw,84px)/1 "Big Shoulders Display","Arial Narrow",ui-monospace,monospace;letter-spacing:.14em;text-indent:.14em;color:#eef0f6;white-space:nowrap;margin-bottom:22px}
-#loader .ld-dom em{font-style:normal;color:#ffb547}
-#loader.settled .ld-dom{animation:ldSettle .6s cubic-bezier(.2,.8,.2,1)}
-@keyframes ldSettle{0%{letter-spacing:.3em;opacity:.4}100%{letter-spacing:.14em;opacity:1}}
+/* the domains roll by at one steady pace for as long as it loads: a column moved by a stepped transform, which the
+   compositor keeps running even while the page is busy compiling shaders */
+#loader .ld-dom{height:1em;overflow:hidden;font:300 clamp(30px,6vw,84px)/1 "Big Shoulders Display","Arial Narrow",ui-monospace,monospace;letter-spacing:.14em;color:#eef0f6;margin-bottom:22px}
+#loader .ld-roll{display:flex;flex-direction:column;align-items:center;animation:ldRoll 2.56s steps(8) infinite;will-change:transform}
+#loader .ld-roll span{height:1em;white-space:nowrap;text-indent:.14em}
+#loader .ld-roll em{font-style:normal;color:#ffb547}
+@keyframes ldRoll{to{transform:translateY(-8em)}}
+@media (prefers-reduced-motion: reduce){#loader .ld-roll{animation:none}}
 </style>
 </head>
 <body>
-<div id="loader" aria-hidden="true"><div class="ld-dom" id="ldDom">KYNCL<em>.APP</em></div><span>Connecting phones <b id="ldN">000</b> / 512</span><div class="ld-bar"><i id="ldBar"></i></div></div>
-<script>
-// runs before anything else loads: flash through the domains until the page is ready, then settle (window.__ldSettle)
-(function(){
-  var D = ['kyncl.app','mationx.com','mationx.cloud','internat.cz','vychazkovka.cz','wearclose.com','petrkyncl.com','petrkyncl.cz'];
-  var el = document.getElementById('ldDom'), last = -1, t = null;
-  function show(d){ var i = d.indexOf('.'); el.innerHTML = d.slice(0, i).toUpperCase() + '<em>' + d.slice(i).toUpperCase() + '</em>'; }
-  function tick(){ last = (last + 1) % D.length; show(D[last]); t = setTimeout(tick, 55); } // round and round, fast
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) tick();
-  window.__ldSettle = function(){
-    clearTimeout(t);
-    var h = location.hostname.replace(/^www\./, ''), home = D.indexOf(h) >= 0 ? h : 'petrkyncl.com';
-    show(home); document.getElementById('loader').classList.add('settled');
-  };
-})();
-</script>
+<div id="loader" aria-hidden="true"><div class="ld-dom"><div class="ld-roll"><span>KYNCL<em>.APP</em></span><span>MATIONX<em>.COM</em></span><span>MATIONX<em>.CLOUD</em></span><span>INTERNAT<em>.CZ</em></span><span>VYCHAZKOVKA<em>.CZ</em></span><span>WEARCLOSE<em>.COM</em></span><span>PETRKYNCL<em>.COM</em></span><span>PETRKYNCL<em>.CZ</em></span></div></div><span>Connecting phones <b id="ldN">000</b> / 512</span><div class="ld-bar"><i id="ldBar"></i></div></div>
 <canvas id="gl" aria-hidden="true"></canvas>
 <div id="flash" aria-hidden="true"></div>
 <svg id="dims" aria-hidden="true"><g id="dimCard" class="hot"></g><g id="dimCam"></g></svg>
@@ -127,7 +115,7 @@ html,body{background:#06070a;margin:0}
     <p>If you're building something that should keep running without you, I'd like to hear about it.</p>
     <dl class="reach">
       <dt>Email</dt>
-      <dd class="mailrow"><a class="mail" id="mailtxt" href="mailto:petr@mationx.com">petr@mationx.com</a><button id="copy" type="button">copy</button></dd>
+      <dd class="mailrow"><a class="mail" id="mailtxt" href="mailto:petr@mationx.com">petr@mationx.com</a></dd>
       <dt>Projects</dt>
       <dd class="sites"><a href="https://mationx.com" target="_blank" rel="noopener">mationx.com ↗</a><a href="https://wearclose.com" target="_blank" rel="noopener">wearclose.com ↗</a><a href="https://internat.cz" target="_blank" rel="noopener">internat.cz ↗</a></dd>
       <dt>Office</dt>
