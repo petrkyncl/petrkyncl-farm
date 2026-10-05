@@ -799,10 +799,36 @@ loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
   phone.add(model);
 }).catch(e => console.warn('iPhone model failed, keeping the procedural one', e));
 const ATTACH = new THREE.Vector3(ph.magsafe[0], ph.magsafe[1], ph.backZ - CARD.d/2 - .0006);
-const soundRings = [0,1,2].map(() => {
-  const r = faceBack(new THREE.Mesh(outlineGeometry(CARD.w, CARD.h, CARD.r, .005), new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.35,.55), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false})));
-  r.position.set(ATTACH.x, ATTACH.y, ph.backZ - .0015); phone.add(r); return r;
-});
+const soundRings = []; // (replaced by the edge light below)
+// While the card records, a thread of light runs round it just outside its edge: two glints chase each other the
+// way Siri's edge glow does, and the whole thing breathes with the voice it's hearing. Built in the card's frame.
+const VOICE = t => {
+  // speech-like: phrases with pauses between them, syllables inside each phrase
+  const phrase = Math.max(0, Math.sin(t*1.7)*.6 + Math.sin(t*2.9 + 1)*.45), syl = .45 + .55*Math.abs(Math.sin(t*11.3)*Math.cos(t*7.1));
+  return Math.min(1, phrase*syl*1.25);
+};
+const edgeLight = (() => {
+  const pts = rrShape(CARD.w + .028, CARD.h + .028, CARD.r + .014).getPoints(160).map(p => new THREE.Vector3(p.x, p.y, 0));
+  const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uLevel: { value: 0 }, uOn: { value: 0 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform float uTime, uLevel, uOn; varying vec2 vUv;
+      float w(float x){ return fract(x + .5) - .5; }
+      void main(){
+        float u = vUv.x;
+        float g1 = exp(-pow(w(u - uTime*.23), 2.0)*70.0), g2 = exp(-pow(w(u + uTime*.17 + .5), 2.0)*45.0);
+        float k = (.07 + 1.7*(g1 + g2)*(.3 + .7*uLevel))*(.4 + .6*uLevel)*uOn;
+        float edge = 1.0 - abs(vUv.y - .5)*2.0; // softer at the tube's sides
+        gl_FragColor = vec4(vec3(1.0, .62, .26)*k*(.6 + .4*edge)*1.8, 1.0);
+      }`
+  });
+  const m = faceBack(new THREE.Mesh(new THREE.TubeGeometry(curve, 320, .0022, 8, true), mat));
+  m.position.set(0, 0, -CARD.d/2 + .004); m.renderOrder = 5; m.visible = false; card.add(m);
+  return m;
+})();
 
 // ---------- Wear Close bracelets (C3: a leather strap with a pin-and-hole fastening, see bracelet.js) ----------
 const BS = 1.3; // bracelets read better a touch larger than life next to the phone
@@ -1500,6 +1526,7 @@ const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
 // the card glides in from beyond the frame edge, hovers over the back showing its face, then the magnet takes it
 const CARD_FROM = new THREE.Vector3(-3.4, 1.4, -2.6), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2), CARD_IN = 4.03, CARD_HOVER = 4.2;
 const dimsEl = document.getElementById('dims'), dimCard = document.getElementById('dimCard'), dimCam = document.getElementById('dimCam');
+const recTag = document.getElementById('recTag'), recTime = document.getElementById('recTime'), recBars = [...recTag.querySelectorAll('i')];
 const dA = new THREE.Vector3(), dB = new THREE.Vector3();
 function toScreen(local, out){ out.copy(local); phone.localToWorld(out); out.project(camera); return [(out.x*.5+.5)*innerWidth, (-out.y*.5+.5)*innerHeight]; }
 // a dimension line drawn like a technical drawing: two ticks, a bar offset to the side, a label
@@ -1621,14 +1648,21 @@ function updateStage(st, now){
   }
   const sinceSnap = (now - fx.snapT)/1000;
   const on = st >= SNAP && awayK < 1 ? Math.min(1, Math.max(0, sinceSnap/.35)) * (sinceSnap < .35 ? (Math.random()>.35?1:.25) : 1) : 0;
-  rc.ledM.color.setRGB(3.2, 1.8, .55).multiplyScalar(on*(.6 + .4*Math.sin(t*4)));
-  // while it records, soft outlines ripple off the card
-  const recBack = st >= SNAP && st < 4.5 && !reduced;
-  soundRings.forEach((r, i) => {
-    const k = ((t*.55 + i/3) % 1);
-    r.visible = recBack;
-    r.scale.setScalar(1 + k*.55); r.material.opacity = (1-k)*.55*on;
-  });
+  const voice = reduced ? .5 : VOICE(t);
+  rc.ledM.color.setRGB(3.2, 1.8, .55).multiplyScalar(on*(.3 + .9*voice));
+  // while it records with its face to you: the edge light and a REC tag on a leader from the status light
+  const recK = on*(1 - smooth(4.46, 4.52, st));
+  edgeLight.visible = recK > .01;
+  edgeLight.material.uniforms.uTime.value = t; edgeLight.material.uniforms.uLevel.value = voice; edgeLight.material.uniforms.uOn.value = recK;
+  recTag.style.opacity = recK.toFixed(3);
+  if (recK > .01){
+    card.updateMatrix();
+    const [lx, ly] = toScreen(new THREE.Vector3(CARD.w/2 - .06, CARD.h/2 - .06, -CARD.d/2).applyMatrix4(card.matrix), dA);
+    recTag.style.transform = `translate(${lx.toFixed(1)}px,${ly.toFixed(1)}px)`;
+    const secs = Math.max(0, Math.floor(sinceSnap));
+    recTime.textContent = `${Math.floor(secs/60)}:${String(secs % 60).padStart(2, '0')}`;
+    recBars.forEach((b, i) => { b.style.transform = `scaleY(${(.15 + .85*(reduced ? .5 : VOICE(t - i*.07))).toFixed(3)})`; });
+  }
   // side profile: 2.9 mm card next to the 4.2 mm camera bump
   const dimK = smooth(4.59, 4.61, st)*(1 - smooth(4.68, 4.7, st));
   dimsEl.style.opacity = dimK.toFixed(3);
@@ -1836,7 +1870,7 @@ const PACE = [
     [4.0, 4.03, 25],    // the call, just answered, face on
     [4.03, 4.15, 40],   // the card glides in while the phone turns its back
     [4.15, 4.33, 55],   // hover over the back, the magnet takes it
-    [4.33, 4.43, 30],   // snap, recording rings
+    [4.33, 4.43, 55],   // snap, then it records: the edge light breathes with the voice, the REC tag
     [4.43, 4.56, 25],   // swing towards the side
     [4.56, 4.6, 15],    // settle dead on the profile
     [4.6, 4.68, 100],   // 2.9 mm against the 4.2 mm camera bump

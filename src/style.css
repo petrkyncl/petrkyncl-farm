@@ -126,3 +126,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .credits a{color:inherit}
 .reel-cap{position:fixed;left:0;top:0;z-index:3;pointer-events:none;display:flex;gap:14px;align-items:baseline;padding-top:12px;font-weight:200;font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:var(--text);opacity:0;transition:opacity .4s;white-space:nowrap}
 .reel-cap b{font-weight:300;color:var(--amber);letter-spacing:.12em}
+/* the card's REC tag: a leader from its status light, the time, the voice as it comes in */
+#recTag{position:fixed;left:0;top:0;z-index:3;pointer-events:none;opacity:0;font-family:var(--f-mono)}
+#recTag .lead{position:absolute;right:6px;top:0;width:64px;height:1px;background:var(--amber);opacity:.7}
+#recTag .txt{position:absolute;right:78px;top:-9px;display:flex;align-items:center;gap:10px;white-space:nowrap}
+#recTag b{font-weight:300;font-size:11px;letter-spacing:.3em;color:var(--amber)}
+#recTag em{font-style:normal;font-weight:300;font-size:13px;letter-spacing:.06em;color:var(--text);font-variant-numeric:tabular-nums}
+#recTag .bars{display:flex;align-items:center;gap:3px;height:16px}
+#recTag .bars i{display:block;width:2px;height:16px;background:var(--amber);border-radius:1px;transform-origin:center;transform:scaleY(.2)}
