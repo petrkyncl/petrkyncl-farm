@@ -123,7 +123,7 @@ function paintBoard(g, tex, lines){
     let bs = h*(land ? (rows.length > 1 ? (note ? .29 : .4) : (note ? .42 : .5)) : .085); g.font = font(bs, 900);
     const widest = Math.max(...rows.map(r => g.measureText(r).width)); if (widest > maxW){ bs *= maxW/widest; g.font = font(bs, 900); }
     // centre the whole block (name, number, date) on the wall; on a tall screen it sits at the top, the copy covers the rest
-    const below = (note ? h*(land ? .1 : .032)*1.28 : 0) + (date ? h*(land ? .036 : .016)*2.2 : 0);
+    const below = (note ? h*(land ? .1 : .032)*1.28 : 0) + (date ? h*(land ? .036 : .016)*2.2 : 0) + (lines[4] && land ? h*(.058*2.3 + .024*2.4) : 0);
     const lh = bs*.86, top = land ? h*.5 - ((rows.length - 1)*lh + below)/2 + bs*.34 : h*.065 - (rows.length - 1)*lh/2 + bs*.34;
     rows.forEach((r, i) => g.fillText(r, cx, top + i*lh));
     // the number that matters (28 VIDEOS, OF 80) clearly under it, then the date, smaller and dimmer
@@ -137,6 +137,14 @@ function paintBoard(g, tex, lines){
     };
     if (note) line(note, h*(land ? .1 : .032), .08, '#fff', 1.28);
     if (date) line(date, h*(land ? .036 : .016), .32, '#8f8f8f', 2.2);
+    const q = lines[4];
+    if (q && land){
+      // a client's words, in the serif, and who said it
+      let qs = h*.058; g.font = `italic 400 ${qs}px "Cormorant Garamond", Georgia, serif`; g.fillStyle = '#fff';
+      const qw = g.measureText(`“${q[0]}”`).width; if (qw > maxW*1.05){ qs *= maxW*1.05/qw; g.font = `italic 400 ${qs}px "Cormorant Garamond", Georgia, serif`; }
+      y += qs*2.3; g.fillText(`“${q[0]}”`, cx, y);
+      line(`${q[1].toUpperCase()} ON FIVERR`, h*.024, .3, '#8f8f8f', 2.4);
+    }
   }
   tex.needsUpdate = true;
 }
@@ -2387,7 +2395,10 @@ const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:
 // The wall spells out the milestone itself big (wall: '\\n' breaks the rows), the number that matters (note) under it,
 // and the date smallest and dimmer at the bottom.
 const MILESTONES = [
-  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders.', wall:'FIVERR', note:'31 ORDERS' },
+  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, and every review five stars but one (the client wrote that one was a misclick).', wall:'FIVERR', note:'31 ORDERS',
+    // real reviews from the Fiverr account, word for word (shortened to one sentence each); they take turns on the wall
+    quotes:[['Peter really knows what he is doing.', 'illustrative818'], ['I was asking for things that are far from typical, and he made it happen.', 'wizard1960'],
+            ['Peter really didn’t miss a detail.', 'rafasegovia'], ['So dedicated and creative.', 'kmj123456'], ['He made everything incredibly easy for us.', 'avgroup01']] },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:'TASKER\nPROJECTS' },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:'MATIONX' },
   { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ' },
@@ -2400,19 +2411,29 @@ const MILESTONES = [
 ];
 const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts holding
 const tlList = document.querySelector('.tl-list'), tlEl = document.querySelector('.tl');
-tlList.innerHTML = MILESTONES.map(m => `<li><span class="tl-date">${m.date}</span><span class="tl-title">${m.title}</span><span class="tl-text">${m.text}</span></li>`).join('');
+tlList.innerHTML = MILESTONES.map(m => `<li><span class="tl-date">${m.date}</span><span class="tl-title">${m.title}</span><span class="tl-text">${m.text}${m.quotes ? `<span class="tl-quote"></span>` : ''}</span></li>`).join('');
 document.getElementById('c6').style.setProperty('--len', 160 + MILESTONES.length*45);
-const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; return { li, wall: [m.wall, m.note || '', m.date.toUpperCase(), m.photo] }; });
+const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; return { li, m, wall: [m.wall, m.note || '', m.date.toUpperCase(), m.photo] }; });
+// a milestone with reviews shows one at a time, on the wall and in the list, and moves on every few seconds
+const QUOTE_MS = 3800;
+let quoteI = 0;
+const wallOf = (k, qi) => { const r = ROAD[k], q = r.m.quotes?.[qi % r.m.quotes.length]; return q ? [...r.wall, q] : r.wall; };
+function showQuote(k, qi){ const el = ROAD[k].li.querySelector('.tl-quote'), q = ROAD[k].m.quotes?.[qi % ROAD[k].m.quotes.length]; if (el && q) el.innerHTML = `“${q[0]}” <em>${q[1]} on Fiverr</em>`; }
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
   const k = Math.max(0, Math.min(ROAD.length-1, Math.floor((st - ROAD_ST)*ROAD.length)));
   if (k !== roadK){
-    paintBoard(boardAG, boardATex, roadK >= 0 ? ROAD[roadK].wall : null);
-    paintBoard(boardBG, boardBTex, ROAD[k].wall);
+    paintBoard(boardAG, boardATex, roadK >= 0 ? wallOf(roadK, quoteI) : null);
+    quoteI = 0;
+    paintBoard(boardBG, boardBTex, wallOf(k, 0)); showQuote(k, 0);
     roadK = k; roadT0 = now;
     ROAD.forEach((r, i) => { r.li.classList.toggle('on', i === k); r.li.classList.toggle('done', i < k); });
     // keep the current milestone at ~38% of the window
     requestAnimationFrame(() => { const li = ROAD[k].li; tlList.style.transform = `translateY(${(tlEl.clientHeight*.38 - li.offsetTop).toFixed(1)}px)`; });
+  }
+  // the next review, rewritten across the wall
+  if (ROAD[k].m.quotes && now - roadT0 > QUOTE_MS && st > ROAD_ST - .3 && st < ROAD_ST + 1){
+    paintBoard(boardAG, boardATex, wallOf(k, quoteI)); quoteI++; paintBoard(boardBG, boardBTex, wallOf(k, quoteI)); showQuote(k, quoteI); roadT0 = now;
   }
   uniforms.uBoardWipe.value = reduced ? 1.1 : clamp01((now - roadT0)/900)*1.1;
   tlEl.style.setProperty('--p', ((k + clamp01((st - ROAD_ST)*ROAD.length - k))/ROAD.length).toFixed(3));
