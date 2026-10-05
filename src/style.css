@@ -54,9 +54,17 @@ h1.lockup span + span{margin-top:.25em}
 .link{display:inline-flex;gap:8px;color:var(--text);text-decoration:none;font-size:12px;letter-spacing:.06em;border-bottom:1px solid var(--rule);padding-bottom:4px;width:fit-content;transition:border-color .2s}
 .link:hover,.link:focus-visible{border-color:var(--amber)}
 a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offset:4px}
-.contact{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center}
-.mail{display:flex;align-items:center;gap:10px;font-size:14px;border:1px solid var(--rule);padding:10px 12px;user-select:all}
-.mail button{font:inherit;font-size:10px;letter-spacing:.12em;text-transform:uppercase;background:var(--amber);color:#1a1205;border:0;padding:6px 9px}
+/* contact: a small definition list, thin uppercase labels on the left, the email as the one big thing */
+.reach{display:grid;grid-template-columns:auto 1fr;gap:16px 26px;align-items:baseline;margin:6px 0 0}
+.reach dt{font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
+.reach dd{margin:0;font-weight:300;font-size:clamp(13px,1vw,15px);color:#bfc3cf}
+.reach a{color:var(--text);text-decoration:none;background:linear-gradient(var(--amber),var(--amber)) left bottom/0 1px no-repeat,linear-gradient(var(--rule),var(--rule)) left bottom/100% 1px no-repeat;padding-bottom:3px;transition:background-size .35s cubic-bezier(.2,.8,.2,1)}
+.reach a:hover,.reach a:focus-visible{background-size:100% 1px,100% 1px}
+.mailrow{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.reach .mail{font-weight:300;font-size:clamp(20px,1.9vw,28px);letter-spacing:.01em}
+#copy{font:inherit;font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);background:none;border:0;padding:0;cursor:pointer;transition:color .2s}
+#copy:hover,#copy:focus-visible{color:var(--amber)}
+.sites{display:flex;flex-wrap:wrap;gap:8px 20px}
 
 .hud{position:fixed;left:clamp(16px,5vw,72px);bottom:18px;z-index:4;font-size:9px;font-weight:200;letter-spacing:.3em;color:var(--dim);display:flex;gap:26px;align-items:center;font-variant-numeric:tabular-nums;pointer-events:none;text-transform:uppercase}
 .hud b{color:var(--text);font-weight:300;letter-spacing:.08em;margin-left:6px}

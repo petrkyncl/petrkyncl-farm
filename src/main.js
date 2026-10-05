@@ -2235,7 +2235,7 @@ addEventListener('pointerdown', e => { if (e.pointerType!=='mouse'){ ndc.set(e.c
 
 document.getElementById('copy').addEventListener('click', () => {
   const t = document.getElementById('mailtxt').textContent, b = document.getElementById('copy');
-  const done = () => { b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1600); };
+  const done = () => { b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1600); };
   if (navigator.clipboard) navigator.clipboard.writeText(t).then(done).catch(()=>getSelection().selectAllChildren(document.getElementById('mailtxt')));
   else getSelection().selectAllChildren(document.getElementById('mailtxt'));
 });
