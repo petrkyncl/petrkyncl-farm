@@ -214,7 +214,7 @@ const REELS = [
 // the captions that ride under the reel's bottom-left corner, by story time (the school's last two describe the wall)
 const CAPTIONS = [
   { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .88].map(x => SCHOOL_ST + x),
-    caps: ['Smíchovská · Prague 5', 'Radko Šablík · director', '400 motivation letters', 'One free place'] },
+    caps: ['Smíchovská střední · Prague 5', 'Radko Šablík · director', '400 motivation letters', 'One free place'] },
   { from: HACK_ST - .05, to: HACK_ST + 1.02, at: REELS[1].at,
     caps: ['The room', 'The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
 ];
@@ -2166,7 +2166,8 @@ function applyLight(h){
   const hex = '#' + room.getHexString();
   if (hex !== roomCss){ roomCss = hex; document.documentElement.style.setProperty('--room', hex); }
 }
-const hTime = document.getElementById('hTime'), hShift = document.getElementById('hShift');
+const hTime = document.getElementById('hTime'), hShift = document.getElementById('hShift'), hAge = document.getElementById('hAge');
+const BORN = Date.UTC(2009, 5, 19, 22); // 20 June 2009, 00:00 in Prague (CEST); the hour isn't known, midnight stands in
 // the room is always lit for night (one tuned look); only the HUD clock follows real Prague time
 const NIGHT = 1.5;
 
@@ -2408,7 +2409,7 @@ const MILESTONES = [
             ['Peter really didn’t miss a detail.', 'rafasegovia'], ['So dedicated and creative.', 'kmj123456'], ['He made everything incredibly easy for us.', 'avgroup01']] },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:'TASKER\nPROJECTS' },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:'MATIONX' },
-  { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ' },
+  { date:'Sep 2025', title:'Smíchovská střední', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ\nSTŘEDNÍ' },
   { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS', photo:'youtube' },
   { date:'Feb 2026', title:'Emancipated at 16', text:'A court in Semily granted me full legal capacity. I had to prove I could support myself and knew how taxes and the paperwork work.', wall:'EMANCIPATED', note:'AT 16', photo:'court' },
   { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:'MATIONX\nSTUDIO' },
@@ -2618,6 +2619,8 @@ function frame(now){
   reelCap.style.opacity = caps && !(meAt && !land) ? 1 : 0; // on a tall screen the Me label takes the caption's place
   nav.style.opacity = ((st > SCHOOL_ST - .15 && st < HACK_ST + 1.1) || uniforms.uDim.value > .3) ? 0 : 1; // out of the reels' way
 
+  // my age, live: the site mentions 15, 16 and 17, so the HUD says how old I am right now
+  hAge.textContent = ((Date.now() - BORN)/(365.2425*864e5)).toFixed(8);
   // LEDs + HUD + live counters
   ledT += dt;
   if (ledT > .35 && !reduced){
