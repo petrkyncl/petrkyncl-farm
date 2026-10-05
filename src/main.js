@@ -35,7 +35,7 @@ const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 // phones and tablets: a lower pixel ratio (their GPUs fill far fewer pixels per frame than a laptop's)
 const TOUCH = matchMedia('(pointer: coarse)').matches;
-renderer.setPixelRatio(Math.min(TOUCH ? 1.5 : 2, devicePixelRatio||1));
+renderer.setPixelRatio(Math.min(TOUCH ? 2.25 : 2, devicePixelRatio||1));
 renderer.toneMapping = THREE.NeutralToneMapping;
 const scene = new THREE.Scene();
 const room = new THREE.Color('#06070a');
@@ -1841,7 +1841,7 @@ function updateStage(st, now){
     phone.quaternion.premultiply(tmpQ.setFromAxisAngle(AXIS_X, Math.atan2(yc, -zc)*still));
     // and when its screen is the point (the transcript, Ask, Internát), the phone comes up bigger so it can be read
     const read = smooth(4.72, 4.8, st)*(1 - smooth(5.03, 5.1, st)) + smooth(7.42, 7.56, st)*(1 - smooth(8.96, 9.06, st));
-    phone.scale.multiplyScalar(1 + .45*read); phone.position.y += .1*read;
+    phone.scale.multiplyScalar(1 + .7*read); phone.position.y += .16*read;
   }
 
   // card: glide in, hover, magnet pull (accelerating), snap, recording, then off it goes
@@ -1969,7 +1969,7 @@ const flashEl = document.getElementById('flash');
 // ---------- post ----------
 // the composer renders into a multisampled target: without it the post chain drops the canvas's antialiasing
 // and long edges (the desk, phone rims) step visibly
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: TOUCH ? 2 : 4 }));
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: TOUCH ? 0 : 4 }));
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .9);
 composer.addPass(bloom);
@@ -2007,8 +2007,8 @@ function updateHead(st, t){
   return k;
 }
 // phones: the resolution adapts to what the GPU manages (a heavy scene steps it down, a calm one brings it back up)
-const PR_MAX = Math.min(TOUCH ? 1.5 : 2, devicePixelRatio || 1), PR_MIN = Math.min(1, PR_MAX);
-let prNow = PR_MAX, dtEma = 16.7, prT = 0;
+const PR_MAX = Math.min(TOUCH ? 2.25 : 2, devicePixelRatio || 1), PR_MIN = Math.min(1.25, PR_MAX);
+let prNow = Math.min(TOUCH ? 2.25 : 2, devicePixelRatio || 1), dtEma = 16.7, prT = 0;
 function adaptResolution(dtMs, now){
   if (!TOUCH) return;
   dtEma += (dtMs - dtEma)*.05;
@@ -2237,7 +2237,12 @@ function updateWriting(y, now){
     const N = wr.chars.length; if (!N) return;
     // on a tall screen the copy sits at the bottom and only shows once the chapter has nearly pinned
     const start = tops[i] - V*(land ? .55 : .12);
-    const n = reduced ? wr.total + 1 : Math.max(0, (y - start)/(V*WRITE_VH/100));
+    // it has to finish while the chapter is still on screen (the last one by the bottom of the page): where there
+    // isn't room for the usual pace, it types faster
+    const last = i === writing.length - 1, docEnd = document.documentElement.scrollHeight - V;
+    const end = last ? docEnd - V*.04 : tops[i] + Math.max(heights[i] - V, 0) + V*.5;
+    const step = Math.min(V*WRITE_VH/100, Math.max(1, (end - start)/(wr.total + 1)));
+    const n = reduced ? wr.total + 1 : Math.max(0, (y - start)/step);
     const head = Math.min(wr.total, Math.floor(n));
     // the cursor belongs to the chapter on screen: from when it starts typing until the chapter has moved on
     const here = y > start && y < tops[i] + heights[i] - V*.35 && !reduced;
@@ -2596,6 +2601,7 @@ const fontsReady = document.fonts && document.fonts.load
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
+window.__pr = () => prNow; // (for checking the adaptive resolution from a debugger)
 if (SHOT){ window.__pick = (x, y) => { const r = new THREE.Raycaster(); r.setFromCamera(new THREE.Vector2(x/innerWidth*2 - 1, -(y/innerHeight)*2 + 1), camera); return r.intersectObject(phone, true).slice(0, 8).map(h => `${[].concat(h.object.material).map(m => m.name || m.type).join('|')} @${h.distance.toFixed(4)} vis:${h.object.visible}`); }; window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; window.__goSt = st => scrollTo(0, scrollForSt(st)); } // for headless checks
 function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
