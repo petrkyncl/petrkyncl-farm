@@ -2198,8 +2198,8 @@ const fitDist = (R*SY/2)/Math.tan(THREE.MathUtils.degToRad(20)) * (land ? 1.12 :
 // pushing in at the middle, so the camera is travelling the whole time the MationX copy is on screen.
 // The school hold pushes in on the one phone that stays lit (it sits right of the copy on a wide screen, above it on a tall one).
 const PB = base[PICK.i];
-const PUSH_LAND = [PB.x - 2.2, PB.y + .15, 13.2, PB.x - 2.5, PB.y + .05, PB.z];
-const PUSH_PORT = [PB.x, PB.y - 3.6, 16.5, PB.x, PB.y - 3.2, PB.z];
+const PUSH_LAND = [PB.x - 1.05, PB.y + .05, 6.3, PB.x - 1.2, PB.y - .05, PB.z]; // close: the phone fills most of the height
+const PUSH_PORT = [PB.x, PB.y - 1.9, 10.5, PB.x, PB.y - 1.55, PB.z];
 const KP = land ? [
   [0,   -4.8,.4,fitDist,    -4.8,0,0],
   [.55, -8.4,4.6,11.6,      -7.4,3.8,1.2],
@@ -2466,7 +2466,7 @@ function frame(now){
     }
     if (reelCap.dataset.k !== key){ reelCap.dataset.k = key; reelCap.querySelector('span').textContent = key; reelCap.querySelector('b').textContent = String(k + 1).padStart(2, '0') + ' / ' + String(caps.caps.length).padStart(2, '0'); }
   }
-  reelCap.style.opacity = caps ? 1 : 0;
+  reelCap.style.opacity = caps && !(meAt && !land) ? 1 : 0; // on a tall screen the Me label takes the caption's place
   nav.style.opacity = ((st > SCHOOL_ST - .15 && st < HACK_ST + 1.1) || uniforms.uDim.value > .3) ? 0 : 1; // out of the reels' way
 
   // LEDs + HUD + live counters
@@ -2504,7 +2504,7 @@ function grade(im, sat){
   g.putImageData(d, 0, 0); return c;
 }
 const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so the pitch video gets the same look
-['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
+['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
 let videoOn = false;
 { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
