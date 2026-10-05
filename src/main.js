@@ -92,7 +92,7 @@ const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTextur
 const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
 const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
 // BOARD_FIT: shown whole in a frame instead of covering the wall (a screenshot: blown up, its webcam corner looked like a mugshot)
-const BOARD_FIT = { youtube: { x: .27, y: .1, w: .58 } };
+const BOARD_FIT = { youtube: { x: .04, y: .04, w: .88 } }; // full width, the whole frame (never cropped into)
 const BOARD_PHOTOS = {}, BOARD_FOCUS = { court: [.5, .3], youtube: [1, .5] }; // where to frame each photo: [x, y] as shares of it (1 = its right edge)
 // milestone photos, grayscale (the board is drawn as ink from its red channel)
 function paintBoard(g, tex, lines){
