@@ -117,7 +117,7 @@ function paintName(){
 }
 // Finale reel on the wall, in colour: the pitch (video), the prize, the group photo. Painted into the face canvas.
 // On a wide wall it sits right of the copy column; on a tall wall in the top part (the copy covers the bottom).
-const REEL = { video: null, pitch: null, ivo: null, kate: null, prize: null, group: null };
+const REEL = { video: null, pitch: null, ivo: null, kate: null, prize: null, group: null, school: null, director: null };
 const ME_IN_GROUP = { x: .828, y: .14 }; // my head in group.jpg (far right, light hoodie)
 let meUV = null;
 // (the camera sees roughly u .25–.8 of the wall right of the copy, so the reel stays inside that)
@@ -133,38 +133,72 @@ function containInto(src, sw, sh, r){
   const s = Math.min(r.w/sw, r.h/sh), dw = sw*s, dh = sh*s, x = r.x + (r.w - dw)/2, y = land ? r.y + r.h - dh : r.y;
   faceG.drawImage(src, x, y, dw, dh); return { x, y, w: dw, h: dh };
 }
-// the reel, in order; each item: how to place it, and the caption that rides under it
-const REEL_ITEMS = [
-  { src:'video', fx:.3,  fy:.45, cap:'The pitch' },
-  { src:'pitch', fx:.62, fy:.35, cap:'On stage' },
-  { src:'ivo',   fx:.3,  fy:.5,  cap:'Ivo Klimsa · organiser' },
-  { src:'kate',  fx:.47, fy:.4,  cap:'Kate · juror' },
-  { src:'prize', fx:.55, fy:.4,  cap:'Second place' },
-  { src:'group', contain:true,   cap:'End of the night' }
+// Two reels share the face canvas: the school (section 7) and the hackathon (section 8). Story time `st` holds
+// section i over 2i..2i+1, so each reel's beats are offsets from its section's hold.
+const SCHOOL_ST = 14, HACK_ST = 16;
+// the school beats after the photos happen on the phones themselves (see the letters mode in the screen shader):
+// the wall fills with motivation letters, then goes dark until one phone is left
+const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .66, ONE_AT = SCHOOL_ST + .86;
+// each reel: its items in order (how to place each one), when each one takes over, and the stretch of story time
+// it owns the face canvas for (starting a beat early so the first frame is there before the wall wipes to it)
+const REELS = [
+  { from: SCHOOL_ST - 1.4, to: LETTERS_AT + .12, at: [0, .25].map(x => SCHOOL_ST + x), items: [
+    { src:'school',   fx:.5,  fy:.42 },
+    { src:'director', fx:.44, fy:.3 }
+  ] },
+  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
+    { src:'video', fx:.3,  fy:.45 },
+    { src:'pitch', fx:.62, fy:.35 },
+    { src:'ivo',   fx:.3,  fy:.5 },
+    { src:'kate',  fx:.47, fy:.4 },
+    { src:'prize', fx:.55, fy:.4 },
+    { src:'group', contain:true, me:true }
+  ] }
 ];
-function drawReelItem(k){
-  const r = reelRegion(), it = REEL_ITEMS[k], s = REEL[it.src];
+// the captions that ride under the reel's bottom-left corner, by story time (the school's last two describe the wall)
+const CAPTIONS = [
+  { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .86].map(x => SCHOOL_ST + x),
+    caps: ['Smíchovská · Prague 5', 'Radko Šablík · director', '400 motivation letters', 'One free place'] },
+  { from: HACK_ST - .05, to: HACK_ST + 1.02, at: REELS[1].at,
+    caps: ['The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
+];
+function drawReelItem(it){
+  const r = reelRegion(), s = REEL[it.src];
   if (!s) return;
   if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy); return; }
   if (it.contain){
     const d = containInto(s, s.width, s.height, r);
-    meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
+    if (it.me) meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
   } else coverInto(s, s.width, s.height, r, it.fx, it.fy);
 }
 // which item, and how far the sweep to the next one has got (left to right, soft edge)
-const REEL_AT = [14.0, 14.17, 14.33, 14.5, 14.66, 14.82], REEL_SWEEP = .06;
-function paintReel(st){
-  const w = faceC.width, h = faceC.height;
-  let k = 0; while (k < REEL_AT.length - 1 && st >= REEL_AT[k+1]) k++;
-  const next = Math.min(k + 1, REEL_AT.length - 1), f = next > k ? clamp01((st - (REEL_AT[next] - REEL_SWEEP))/REEL_SWEEP) : 0;
+const REEL_SWEEP = .06;
+const beatAt = (at, st) => { let k = 0; while (k < at.length - 1 && st >= at[k+1]) k++; return k; };
+function paintReel(reel, st){
+  const w = faceC.width, h = faceC.height, at = reel.at, k = beatAt(at, st);
+  const next = Math.min(k + 1, at.length - 1), f = next > k ? clamp01((st - (at[next] - REEL_SWEEP))/REEL_SWEEP) : 0;
   faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h);
-  drawReelItem(k);
+  drawReelItem(reel.items[k]);
   if (f > 0){
     const r = reelRegion(), edge = r.x + (r.w + 80)*f - 40;
-    faceG.save(); faceG.beginPath(); faceG.rect(0, 0, edge, h); faceG.clip(); faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h); drawReelItem(next); faceG.restore();
+    faceG.save(); faceG.beginPath(); faceG.rect(0, 0, edge, h); faceG.clip(); faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h); drawReelItem(reel.items[next]); faceG.restore();
   }
   faceTex.needsUpdate = true;
   return (f > .5 ? next : k);
+}
+// the one phone left at the end of the school beat: picked where the reel sits, it ends up showing me on stage
+const PICK = (() => {
+  const u = land ? .55 : .5, v = land ? .48 : .74;
+  const c = Math.round(u*C - .5), r = Math.round(v*R - .5);
+  return { c, r, i: r*C + c };
+})();
+const [pickC, pickG] = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = Math.round(256*SH/SW); return [c, c.getContext('2d')]; })();
+const pickTex = new THREE.CanvasTexture(pickC);
+function paintPick(im){
+  // cover-fit the stage photo around me (head and mic, the laptop just out of frame)
+  const w = pickC.width, h = pickC.height, s = Math.max(w/im.width, h/im.height), dw = im.width*s, dh = im.height*s;
+  pickG.drawImage(im, Math.min(0, Math.max(w - dw, w/2 - .635*dw)), Math.min(0, Math.max(h - dh, h*.42 - .4*dh)), dw, dh);
+  pickTex.needsUpdate = true;
 }
 const N = new THREE.Vector3();
 function wallPoint(u, v, out){
@@ -199,7 +233,8 @@ const uniforms = {
   uTime:{value:0}, uWall:{value:1}, uFrom:{value:9}, uTo:{value:9}, uSweep:{value:0},
   uHover:{value:-1}, uBoot:{value:reduced?1.1:0}, uGrid:{value:new THREE.Vector2(C,R)},
   uName:{value:nameTex}, uFace:{value:faceTex}, uFaceColor:{value:1}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
-  uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0}
+  uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0},
+  uOne:{value:0}, uPickOn:{value:0}, uPickId:{value:PICK.i}, uPickCell:{value:new THREE.Vector2(PICK.c, PICK.r)}, uPick:{value:pickTex}
 };
 
 const screenMat = new THREE.ShaderMaterial({
@@ -215,7 +250,8 @@ const screenMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader:`
     uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe, uFaceColor;
-    uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB; uniform vec3 uRoom;
+    uniform float uOne, uPickOn, uPickId; uniform vec2 uPickCell;
+    uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB, uPick; uniform vec3 uRoom;
     varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
     const float ASP = ${(SH/SW).toFixed(4)};
     float hash(float n){ return fract(sin(n*12.9898+4.1414)*43758.5453); }
@@ -534,6 +570,39 @@ const screenMat = new THREE.ShaderMaterial({
       return statusBar(q, col, vec3(.95));
     }
 
+    // a motivation letter filling the screen (the school beat): a sender block, a date, "Dear …", paragraphs, a signature.
+    // Every phone gets its own: typed or handwritten, white or cream, some with a passport photo clipped on.
+    vec3 letterPage(vec2 q, float id){
+      float h1 = hash(id*3.17), h2 = hash(id*7.31 + 1.0), h3 = hash(id*1.93 + 5.0);
+      bool hand = h1 < .26;
+      vec3 paper = mix(vec3(.84,.85,.86), vec3(.86,.82,.74), step(.55, h2)) * (.93 + .07*h3);
+      vec3 inkc = hand ? vec3(.17,.24,.5) : vec3(.2,.21,.25);
+      float y = ASP - q.y; // from the top of the page
+      float aa = max(.006, fwidth(y)*1.5);
+      float L = 0.0;
+      // sender block, top left, and the date on the right
+      for (int i = 0; i < 3; i++){ float fi = float(i); L = max(L, fillD(abs(y - .18 - fi*.055) - .009, aa)*step(.12, q.x)*step(q.x, .12 + .2 + .16*hash(id + fi*4.1))); }
+      L = max(L, fillD(abs(y - .42) - .009, aa)*step(.6, q.x)*step(q.x, .88)*(1.0 - step(.7, h3)));
+      // some applications come with a photo clipped on
+      float photo = step(.7, h3)*fillD(sdBox(q - vec2(.75, ASP - .26), vec2(.11, .14), .0), aa);
+      // salutation, then paragraphs: ragged last lines, a gap between paragraphs
+      L = max(L, fillD(abs(y - .56) - .01, aa)*step(.12, q.x)*step(q.x, .48));
+      float sp = hand ? .075 : .058;
+      float ly = (y - .68)/sp, li = floor(ly), lf = fract(ly);
+      float wob = hand ? sin(q.x*19.0 + li*2.3 + id)*.07 : 0.0;
+      float paraEnd = step(.72, hash(li*1.7 + id*.31));
+      float lineW = paraEnd > .5 ? .25 + .4*hash(li + id) : .74 + .02*hash(li*2.0 + id);
+      float gap = step(.72, hash((li - 1.0)*1.7 + id*.31)); // the line after a paragraph's end stays empty
+      float body = fillD(abs(lf - .5 - wob) - (hand ? .1 : .14), aa/sp)*step(.12, q.x)*step(q.x, .12 + lineW)*(1.0 - gap);
+      body *= step(0.0, ly)*step(y, 1.78);
+      L = max(L, body*(hand ? .85 : .7));
+      // signature
+      float sx = (q.x - .14)/.34, sig = sin(sx*21.0 + id)*.022 + sin(sx*7.0)*.015;
+      L = max(L, fillD(abs(y - 1.9 - sig) - .006, aa*1.2)*step(0.0, sx)*step(sx, 1.0));
+      vec3 col = mix(paper, inkc, L*.85);
+      return mix(col, vec3(.42,.4,.38)*(.7 + .3*fillD(sdBox(q - vec2(.75, ASP - .23), vec2(.05, .06), .03), aa)), photo);
+    }
+
     // what a phone on the farm is doing right now: mostly chats, some feeds
     vec3 automation(vec2 q, float t, float s){
       if (vApp < .5) return chatApp(q, t, s, 0.0);
@@ -564,14 +633,16 @@ const screenMat = new THREE.ShaderMaterial({
       float nm = texture2D(uName, wuv).r;
       // sample everything up front (no texture reads in divergent branches), then pick per cell
       float bd = mix(texture2D(uBoardA, wuv).r, texture2D(uBoardB, wuv).r, step(vDelay, uBoardWipe));
-      float iA = uImgFrom < .5 ? nm : (uImgFrom < 1.5 ? bd : fl);
-      float iB = uImgTo < .5 ? nm : (uImgTo < 1.5 ? bd : fl);
-      float img = mix(iA, iB, step(vDelay, uImgWipe));
+      vec3 me = texture2D(uPick, vUv).rgb;
+      // image modes: 0 name, 1 board, 2 photo reel (colour), 3 letters
+      float mode = step(vDelay, uImgWipe) > .5 ? uImgTo : uImgFrom;
+      float img = mode < .5 ? nm : (mode < 1.5 ? bd : fl);
       vec2 pg = fract(vUv*vec2(54.0,112.0));
       float grid = .74 + .26*step(.18,pg.x)*step(.18,pg.y);
       img *= grid;
-      // the hackathon reel shows in colour; name and board stay as ink
-      float useFc = step(1.5, step(vDelay, uImgWipe) > .5 ? uImgTo : uImgFrom)*uFaceColor;
+      // the photo reels show in colour; name and board stay as ink
+      float useFc = step(1.5, mode)*uFaceColor;
+      float isPick = step(abs(vId - uPickId), .5);
       float glitch = step(.985, hash(vId*.37 + floor(uTime*3.0)));
       // hovering a phone in an image (name, board, photo) lifts it out of the picture to show what it's running
       float wm = smoothstep(vDelay, vDelay+.2, uWall*1.25) * (1.0 - glitch*.85*step(.99,uWall)*(1.0 - uFaceColor*step(1.5, uImgTo))) * (1.0 - isHover); // no glitching through the photo reel
@@ -580,14 +651,29 @@ const screenMat = new THREE.ShaderMaterial({
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
       vec3 ac = typ > 6.5 ? automation(q, t, vSeed) : ((typ > 2.5 && typ < 3.5) ? chatApp(q, t, vSeed, 0.0) : bg + (ink-bg)*a);
       vec3 imgCol = mix(bg + (ink-bg)*img*1.05, mix(bg, fc*.92, grid), useFc);
+      if (mode > 2.5){
+        // letters, then the wall goes dark from the outside in until one phone is left: each one squeezes to a
+        // bright line and out, like an old screen switching off. The last one turns into me.
+        vec3 page = letterPage(q0, vId);
+        // the radius spends most of its time near the phone (that's the part the pushed-in camera sees), and ends
+        // below zero so the nearest neighbours are fully out too
+        float r = pow(1.0 - uOne, 2.2)*${(Math.hypot(C*SX, R*SY)*1.02).toFixed(2)} - 1.7;
+        float off = (1.0 - isPick)*clamp((length((vCell - uPickCell)*vec2(${SX.toFixed(2)}, ${SY.toFixed(2)})) - r)/1.4, 0.0, 1.0);
+        float half_ = .5*(1.0 - off)*(1.0 - off);
+        float band = fillD(abs(vUv.y - .5) - half_, .012)*(1.0 - step(.98, off));
+        page = mix(page, vec3(1.0), smoothstep(.45, .9, off)*.7);
+        page = mix(page, me, isPick*uPickOn);
+        imgCol = mix(bg*.6, mix(bg, page, grid), band);
+      }
       vec3 col = mix(ac*mix(1.0, .3, uWall*(1.0 - isHover)), imgCol, wm);
       col = mix(col, vec3(0.0), step(q0.y, NAV)*(1.0 - wm));
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
       col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
       // selection: a thin amber line that follows the screen's rounded edge, a faint inner glow, and a lift in brightness
       col *= 1.0 + .06*isHover;
-      col = mix(col, vec3(1.0,.71,.28), isHover*(1.0 - smoothstep(.004, .011, -dEdge)));
-      col += vec3(1.0,.71,.28)*isHover*.05*(1.0 - smoothstep(.0, .07, -dEdge));
+      float edgeOn = max(isHover, isPick*uPickOn*step(2.5, mode)*wm); // the one phone left gets the same amber edge
+      col = mix(col, vec3(1.0,.71,.28), edgeOn*(1.0 - smoothstep(.004, .011, -dEdge)));
+      col += vec3(1.0,.71,.28)*edgeOn*.05*(1.0 - smoothstep(.0, .07, -dEdge));
       // Android: punch-hole camera at the top, gesture bar at the bottom
       col *= smoothstep(0.0, .006, length(pp - vec2(0.0, ${(SH/2-.062).toFixed(4)})) - .027);
       col = mix(col, vec3(.78,.8,.84), fillD(sdBox(pp - vec2(0.0, ${(-SH/2 + .05*SW).toFixed(4)}), vec2(.12,.008), .008), .005)*.75*(1.0 - wm));
@@ -1632,6 +1718,10 @@ const fitDist = (R*SY/2)/Math.tan(THREE.MathUtils.degToRad(20)) * (land ? 1.12 :
 // [wp, eye xyz, target xyz]: wp is the wall chapter position (0 name, 1 MationX, 2 Recents …). The MationX stretch
 // (0.5 → 2) is one long crane move: it starts high on the left and arcs down and across to the lower right,
 // pushing in at the middle, so the camera is travelling the whole time the MationX copy is on screen.
+// The school hold pushes in on the one phone that stays lit (it sits right of the copy on a wide screen, above it on a tall one).
+const PB = base[PICK.i];
+const PUSH_LAND = [PB.x - 2.2, PB.y + .15, 13.2, PB.x - 2.5, PB.y + .05, PB.z];
+const PUSH_PORT = [PB.x, PB.y - 3.6, 16.5, PB.x, PB.y - 3.2, PB.z];
 const KP = land ? [
   [0,   -4.8,.4,fitDist,    -4.8,0,0],
   [.55, -8.4,4.6,11.6,      -7.4,3.8,1.2],
@@ -1641,8 +1731,10 @@ const KP = land ? [
   [3,   -1.6,-3.6,12.4,      -.8,-4.2,.3],
   [4,    4.4,4.2,9.2,        5.4,4.2,.9],
   [5,   -4.8,.35,fitDist*.98, -4.8,0,0],
-  [6,   -4.8,.2,fitDist*1.04, -4.8,0,0],
-  [7,   -4.8,.45,fitDist*1.1, -4.8,.1,0]
+  [6,   -4.8,.15,fitDist*1.02, -4.8,0,0],
+  [6.45, ...PUSH_LAND],
+  [7,   -4.8,.2,fitDist*1.04, -4.8,0,0],
+  [8,   -4.8,.45,fitDist*1.1, -4.8,.1,0]
 ] : [
   [0,    0,.6,fitDist,      0,0,0],
   [.55, -3.4,9.4,15,       -3.0,8.8,1.5],
@@ -1652,21 +1744,25 @@ const KP = land ? [
   [3,   -1.4,-8.4,14,     -1.2,-8.6,1],
   [4,    2,10.4,13,         2.4,10.2,1.2],
   [5,    0,.5,fitDist,      0,0,0],
-  [6,    0,.4,fitDist*1.04, 0,0,0],
-  [7,    0,.6,fitDist*1.1,  0,.1,0]
+  [6,    0,.4,fitDist*1.02, 0,0,0],
+  [6.45, ...PUSH_PORT],
+  [7,    0,.4,fitDist*1.04, 0,0,0],
+  [8,    0,.6,fitDist*1.1,  0,.1,0]
 ];
 const posCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[1],k[2],k[3])), false, 'centripetal');
 const tgtCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[4],k[5],k[6])), false, 'centripetal');
-const S = 8; // wall chapters
+const S = 9; // wall chapters
 // wp → curve parameter (the curve is parametrised by point index)
 // story time → camera position on the wall path. Sections hold (copy pinned) then transition; during a hold the
 // camera keeps drifting a little (MationX the most), during a transition it travels to the next chapter.
-const HOLD_DRIFT = { 2: .4, 5: .12 };
+// The school drifts all the way to its push-in, but only once the letters are up.
+const HOLD_DRIFT = { 2: .4, 5: .12, 7: .45 };
+const HOLD_EASE = { 7: h => smooth(.45, .98, h) };
 function wallCam(st){
   const sec = Math.floor(st/2), within = st - 2*sec;
   if (sec < 1) return 0;
   const start = sec - 1, drift = HOLD_DRIFT[sec] || 0, hold = Math.min(within, 1), trans = Math.max(within - 1, 0);
-  return trans > 0 ? lerp(start + drift, start + 1, trans) : start + drift*hold;
+  return trans > 0 ? lerp(start + drift, start + 1, trans) : start + drift*(HOLD_EASE[sec] ? HOLD_EASE[sec](hold) : hold);
 }
 function camParam(wp){
   let j = 0; while (j < KP.length - 2 && wp >= KP[j+1][0]) j++;
@@ -1711,14 +1807,14 @@ let tapT = 0;
 document.getElementById('hDev').textContent = COUNT;
 
 // ---------- "So far" ----------
-const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:0}]; // … board, hackathon reel, the name again to close
+const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:2}, {img:0}]; // … board, school reel (then letters), hackathon reel, the name again to close
 // The timeline is data: add a milestone here and the chapter grows (its scroll length scales with the count).
 // wall: [big, small] is what the phone wall spells out for it.
 const MILESTONES = [
   { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, about $1,000.', wall:['31', 'FIVERR ORDERS'] },
-  { date:'Age 15', title:'Smíchovská', text:'Got into the best IT school in the country: 621 applied for IT, 128 got in.', wall:['128', 'OF 621 ADMITTED'] },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:['TASKER', 'PROJECTS.COM'] },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:['MATIONX', 'SINCE AUG 2025'] },
+  { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:['SSPŠ', 'SMÍCHOVSKÁ'] },
   { date:'Nov 2025', title:'mationx.cloud', text:'An API, so other software can drive the phones too.', wall:['.CLOUD', 'THE API'] },
   { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:['2ND', 'OF 80'] },
   { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', wall:['500+', 'PHONES ONLINE'] }
@@ -1790,6 +1886,13 @@ function frame(now){
   U.uFrom.value = a === 0 ? 9 : (A.t ?? B.t ?? 9); U.uTo.value = B.t ?? A.t ?? 9;
   U.uSweep.value = (a === 0 ? smooth(.5, 1, loc) : loc)*1.05;
   U.uImgFrom.value = A.img ?? B.img ?? 0; U.uImgTo.value = B.img ?? A.img ?? 0; U.uImgWipe.value = loc*1.05;
+  // the school beat runs inside its hold: photos → letters (a sweep) → dark from the outside in → one phone, me
+  if (st >= LETTERS_AT && st < HACK_ST){
+    if (st < SCHOOL_ST + 1){ U.uImgFrom.value = 2; U.uImgTo.value = 3; U.uImgWipe.value = clamp01((st - LETTERS_AT)/.1)*1.05; }
+    else U.uImgFrom.value = 3; // leaving for the hackathon reel: the wipe (loc) carries the wall from the dark letters
+  }
+  U.uOne.value = smooth(IRIS_AT, ONE_AT - .02, st);
+  U.uPickOn.value = smooth(ONE_AT - .04, ONE_AT + .02, st);
   updateRoad(st, now);
 
   const deskP = 1 - smooth(.97, 1.03, st);
@@ -1810,8 +1913,9 @@ function frame(now){
   }
   if (overLink) h = -1;
   hover = h; U.uHover.value = h;
+  const pickUp = st > ONE_AT && st < SCHOOL_ST + 1.15; // the one phone left comes out of the wall
   for (let i=0;i<COUNT;i++){
-    const tg = (i===hover && !reduced) ? 1 : 0;
+    const tg = ((i===hover || (i===PICK.i && pickUp)) && !reduced) ? 1 : 0;
     if (Math.abs(lift[i]-tg) > .002){ lift[i] += (tg-lift[i])*.18; place(i); bodies.instanceMatrix.needsUpdate = true; screens.instanceMatrix.needsUpdate = true; cables.instanceMatrix.needsUpdate = true; }
   }
 
@@ -1835,24 +1939,31 @@ function frame(now){
   } else { sel.style.opacity = 0; cross.style.opacity = (fine && !reduced && ndc.x<2) ? (overLink ? .35 : .9) : 0; }
 
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
-  const reelK = st > 12.6 ? paintReel(st) : -1;
-  if (REEL.video){ const want = st > 12.6 && st < 15.2; if (want && REEL.video.paused) REEL.video.play().catch(()=>{}); else if (!want && !REEL.video.paused) REEL.video.pause(); }
-  const meOn = meUV && reelK === REEL_ITEMS.length - 1 && st >= 14 && st < 15.02;
-  // caption under the reel's bottom-left corner
-  const capOn = reelK >= 0 && st > 13.95 && st < 15.02;
-  if (capOn){
-    const r = reelRegion();
+  const reel = REELS.find(r => st > r.from && st < r.to);
+  const reelK = reel ? paintReel(reel, st) : -1;
+  if (REEL.video){ const want = st > HACK_ST - 1.4 && st < HACK_ST + 1.2; if (want && REEL.video.paused) REEL.video.play().catch(()=>{}); else if (!want && !REEL.video.paused) REEL.video.pause(); }
+  // "Me": over the group photo at the end of the hackathon reel, or over the one phone left at school
+  let meAt = null;
+  if (st >= ONE_AT + .02 && st < SCHOOL_ST + 1.02){ screens.getMatrixAt(PICK.i, tmpM); meAt = corner.set(0, SH/2 + .08, 0).applyMatrix4(tmpM).applyMatrix4(wall.matrixWorld); }
+  else if (meUV && reel === REELS[1] && reelK === reel.items.length - 1 && st >= HACK_ST && st < HACK_ST + 1.02) meAt = wallPoint(meUV.u, meUV.v, corner).applyMatrix4(wall.matrixWorld);
+  if (meAt){
+    meAt.project(camera);
+    meEl.style.transform = `translate(${(meAt.x*.5+.5)*innerWidth}px,${Math.max(56, (-meAt.y*.5+.5)*innerHeight)}px) translate(-50%,-100%)`;
+  }
+  meEl.style.opacity = meAt ? 1 : 0;
+  // caption under the reel's bottom-left corner (kept on screen when the camera has pushed in); on a tall screen the
+  // copy sits right under the reel, so the caption goes up top instead
+  const caps = CAPTIONS.find(c => st > c.from && st < c.to);
+  if (caps){
+    const r = reelRegion(), k = beatAt(caps.at, st + REEL_SWEEP/2);
     wallPoint(r.x/faceC.width + .004, 1 - (r.y + r.h)/faceC.height - .012, corner).applyMatrix4(wall.matrixWorld).project(camera);
-    reelCap.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${(-corner.y*.5+.5)*innerHeight}px)`;
-    if (reelCap.dataset.k !== String(reelK)){ reelCap.dataset.k = reelK; reelCap.querySelector('span').textContent = REEL_ITEMS[reelK].cap; reelCap.querySelector('b').textContent = String(reelK + 1).padStart(2, '0') + ' / ' + String(REEL_ITEMS.length).padStart(2, '0'); }
+    const cx = Math.min(innerWidth - 240, Math.max(16, (corner.x*.5+.5)*innerWidth)), cy = land ? Math.min(innerHeight - 88, (-corner.y*.5+.5)*innerHeight) : 18;
+    reelCap.style.transform = `translate(${cx}px,${cy}px)`;
+    const key = caps.caps[k];
+    if (reelCap.dataset.k !== key){ reelCap.dataset.k = key; reelCap.querySelector('span').textContent = key; reelCap.querySelector('b').textContent = String(k + 1).padStart(2, '0') + ' / ' + String(caps.caps.length).padStart(2, '0'); }
   }
-  reelCap.style.opacity = capOn ? 1 : 0;
-  if (meOn){
-    wallPoint(meUV.u, meUV.v, corner).applyMatrix4(wall.matrixWorld).project(camera);
-    meEl.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${Math.max(56, (-corner.y*.5+.5)*innerHeight)}px) translate(-50%,-100%)`;
-  }
-  meEl.style.opacity = meOn ? 1 : 0;
-  nav.style.opacity = ((st > 13.85 && st < 15.1) || uniforms.uDim.value > .3) ? 0 : 1; // out of the reel's way
+  reelCap.style.opacity = caps ? 1 : 0;
+  nav.style.opacity = ((st > SCHOOL_ST - .15 && st < HACK_ST + 1.1) || uniforms.uDim.value > .3) ? 0 : 1; // out of the reels' way
 
   // LEDs + HUD + live counters
   ledT += dt;
@@ -1877,7 +1988,7 @@ function frame(now){
 }
 
 // finale reel media
-['pitch', 'ivo', 'kate', 'prize', 'group'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = im; }; im.src = `/media/${n}.jpg`; });
+['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
 { const v = document.createElement('video'); v.src = '/media/pitch.mp4'; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('playsinline', ''); REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"', '400 64px Michroma', '400 20px Outfit', '700 20px Outfit', '900 20px Outfit'].map(f => document.fonts.load(f))).catch(()=>{})
