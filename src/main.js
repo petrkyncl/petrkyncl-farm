@@ -18,6 +18,7 @@ const clamp01 = v => v<0 ? 0 : v>1 ? 1 : v;
 const smooth = (a,b,t) => { t = clamp01((t-a)/(b-a)); return t*t*(3-2*t); };
 const lerp = (a,b,t) => a + (b-a)*t;
 const easeIO = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+const easeOut = t => 1 - Math.pow(1 - t, 3);
 const outBack = t => 1 + 2.70158*Math.pow(t-1,3) + 1.70158*Math.pow(t-1,2);
 const isStacked = () => innerWidth < 1024 || innerWidth/innerHeight < 23/20;
 
@@ -142,9 +143,11 @@ const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .66, ONE_AT = SCHOOL_ST
 // each reel: its items in order (how to place each one), when each one takes over, and the stretch of story time
 // it owns the face canvas for (starting a beat early so the first frame is there before the wall wipes to it)
 const REELS = [
+  // the school photos run edge to edge on a wide wall (the building is 4:3 like the wall itself; the director lands
+  // right of the copy), graded down towards grey so they sit back like the wall's own pictures
   { from: SCHOOL_ST - 1.4, to: LETTERS_AT + .12, at: [0, .25].map(x => SCHOOL_ST + x), items: [
-    { src:'school',   fx:.5,  fy:.42 },
-    { src:'director', fx:.44, fy:.3 }
+    { src:'school',   full:true, fx:.5, fy:.5 },
+    { src:'director', full:true, fx:.3, fy:.3 }
   ] },
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
     { src:'video', fx:.3,  fy:.45 },
@@ -162,8 +165,9 @@ const CAPTIONS = [
   { from: HACK_ST - .05, to: HACK_ST + 1.02, at: REELS[1].at,
     caps: ['The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
 ];
+const itemRegion = it => it.full && land ? { x: 0, y: 0, w: faceC.width, h: faceC.height } : reelRegion();
 function drawReelItem(it){
-  const r = reelRegion(), s = REEL[it.src];
+  const r = itemRegion(it), s = REEL[it.src];
   if (!s) return;
   if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy); return; }
   if (it.contain){
@@ -180,7 +184,7 @@ function paintReel(reel, st){
   faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h);
   drawReelItem(reel.items[k]);
   if (f > 0){
-    const r = reelRegion(), edge = r.x + (r.w + 80)*f - 40;
+    const r = itemRegion(reel.items[next]), edge = r.x + (r.w + 80)*f - 40;
     faceG.save(); faceG.beginPath(); faceG.rect(0, 0, edge, h); faceG.clip(); faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h); drawReelItem(reel.items[next]); faceG.restore();
   }
   faceTex.needsUpdate = true;
@@ -234,6 +238,7 @@ const uniforms = {
   uHover:{value:-1}, uBoot:{value:reduced?1.1:0}, uGrid:{value:new THREE.Vector2(C,R)},
   uName:{value:nameTex}, uFace:{value:faceTex}, uFaceColor:{value:1}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
   uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0},
+  uNewId:{value:-1}, uNewOn:{value:1},
   uOne:{value:0}, uPickOn:{value:0}, uPickId:{value:PICK.i}, uPickCell:{value:new THREE.Vector2(PICK.c, PICK.r)}, uPick:{value:pickTex}
 };
 
@@ -250,7 +255,7 @@ const screenMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader:`
     uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe, uFaceColor;
-    uniform float uOne, uPickOn, uPickId; uniform vec2 uPickCell;
+    uniform float uOne, uPickOn, uPickId, uNewId, uNewOn; uniform vec2 uPickCell;
     uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB, uPick; uniform vec3 uRoom;
     varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
     const float ASP = ${(SH/SW).toFixed(4)};
@@ -603,6 +608,16 @@ const screenMat = new THREE.ShaderMaterial({
       return mix(col, vec3(.42,.4,.38)*(.7 + .3*fillD(sdBox(q - vec2(.75, ASP - .23), vec2(.05, .06), .03), aa)), photo);
     }
 
+    // a brand-new Android on its first-run screen: logo, "Hi there", a line of small print, Start
+    vec3 setupScreen(vec2 q){
+      vec3 c = vec3(.93,.94,.97);
+      c = mix(c, vec3(.26,.52,.96), fillD(length(q - vec2(.5, ASP*.64)) - .12, .01));
+      c = mix(c, vec3(.2,.22,.26), fillD(sdBox(q - vec2(.5, ASP*.46), vec2(.25,.035), .02), .008));
+      c = mix(c, vec3(.62,.64,.68), fillD(sdBox(q - vec2(.5, ASP*.39), vec2(.33,.016), .01), .008));
+      c = mix(c, vec3(.26,.52,.96), fillD(sdBox(q - vec2(.7, .2), vec2(.17,.05), .05), .008));
+      return c*.86;
+    }
+
     // what a phone on the farm is doing right now: mostly chats, some feeds
     vec3 automation(vec2 q, float t, float s){
       if (vApp < .5) return chatApp(q, t, s, 0.0);
@@ -677,6 +692,9 @@ const screenMat = new THREE.ShaderMaterial({
       // Android: punch-hole camera at the top, gesture bar at the bottom
       col *= smoothstep(0.0, .006, length(pp - vec2(0.0, ${(SH/2-.062).toFixed(4)})) - .027);
       col = mix(col, vec3(.78,.8,.84), fillD(sdBox(pp - vec2(0.0, ${(-SH/2 + .05*SW).toFixed(4)}), vec2(.12,.008), .008), .005)*.75*(1.0 - wm));
+      // the replacement phone: dark until it's plugged in, then a boot flash like the rest had at the start
+      float fresh = step(abs(vId - uNewId), .5);
+      col = mix(col, setupScreen(q0), fresh*(1.0 - uNewOn)) + vec3(.6,.65,.75)*fresh*uNewOn*(1.0 - uNewOn)*3.0;
       float on = step(vSeed, uBoot);
       float flash = on*(1.0-smoothstep(0.0,.06,uBoot-vSeed));
       col = mix(bg*.35, col, on) + vec3(.6,.65,.75)*flash;
@@ -701,16 +719,33 @@ wall.add(bodies, screens, shelves, leds, cables);
 
 const lift = new Float32Array(COUNT);
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3();
-let hiddenSlot = -1;
+// The slot the iPhone came out of stays empty while it's away; once it has gone for good, a fresh Android flies in
+// on its own, slides into the slot, gets its cable and boots. refill: 0 empty … 1 docked.
+let hiddenSlot = -1, refill = 0;
+const flyQ = new THREE.Quaternion(), flyE = new THREE.Euler(), flyV = new THREE.Vector3(), flyN = new THREE.Vector3();
 function place(i){
   const b=base[i], l=lift[i];
   tmpE.set(0,b.ry,0); tmpQ.setFromEuler(tmpE);
   N.set(Math.sin(b.ry),0,Math.cos(b.ry));
-  const k = (1 + l*.08)*(i === hiddenSlot ? 0 : 1);
-  tmpP.set(b.x,b.y,b.z).addScaledVector(N, l*.9); tmpS.set(k,k,k);
-  tmpM.compose(tmpP,tmpQ,tmpS); bodies.setMatrixAt(i,tmpM); cables.setMatrixAt(i,tmpM);
-  // the body grows by k when lifted, so its front moves out too: keep the screen in front of it
-  tmpP.addScaledVector(N, BD*Math.max(k, 1)/2+.002); tmpM.compose(tmpP,tmpQ,tmpS); screens.setMatrixAt(i,tmpM);
+  let k = 1 + l*.08, plugged = 1;
+  tmpP.set(b.x,b.y,b.z).addScaledVector(N, l*.9);
+  if (i === hiddenSlot){
+    // it comes in from just past the lower edge, close to the camera, and swings out right and back on a curve
+    // (quadratic Bézier in the slot's frame: along the wall, up, out of the wall), tumbling less and less; it squares
+    // up in front of the slot, then pushes in
+    const fly = easeOut(smooth(0, .62, refill)), push = easeIO(smooth(.56, .84, refill)), away = 1 - fly;
+    const bz = (a, c, e) => away*away*a + 2*away*fly*c + fly*fly*e;
+    const along = bz(-.8, 5, 0), up = bz(-4.8, 1.5, 0), out = bz(21, 9, 1.6)*(1 - push) + 0;
+    tmpP.addScaledVector(N, out).add(flyV.set(Math.cos(b.ry)*along, up, -Math.sin(b.ry)*along));
+    flyQ.setFromEuler(flyE.set(.5*away, -Math.PI*.8*away*away, .45*away)); tmpQ.multiply(flyQ);
+    k = refill > 0 ? 1 : 0; plugged = refill > .86 ? 1 : 0;
+  }
+  tmpS.set(k,k,k);
+  tmpM.compose(tmpP,tmpQ,tmpS); bodies.setMatrixAt(i,tmpM);
+  tmpS.setScalar(k*plugged); tmpM.compose(tmpP,tmpQ,tmpS); cables.setMatrixAt(i,tmpM); tmpS.set(k,k,k);
+  // the body grows by k when lifted, so its front moves out too: keep the screen in front of it (along the phone's
+  // own facing, which only differs from the slot's while the replacement is in the air)
+  tmpP.addScaledVector(flyN.set(0,0,1).applyQuaternion(tmpQ), BD*Math.max(k, 1)/2+.002); tmpM.compose(tmpP,tmpQ,tmpS); screens.setMatrixAt(i,tmpM);
 }
 for (let i=0;i<COUNT;i++){
   place(i);
@@ -816,6 +851,9 @@ const SF = '-apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sa
 const SERIF = '"Cormorant Garamond", Georgia, serif';
 function rr(x,y,w,h,r){ ui.beginPath(); ui.roundRect(x,y,w,h,r); }
 function wrap(text, maxW){ const words = text.split(' '), lines = []; let cur = ''; for (const w of words){ const t = cur ? cur+' '+w : w; if (ui.measureText(t).width > maxW && cur){ lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines; }
+// the Wear Close mark (brand/wearclose-mark.svg, 58 × 40): two halves of a pair, Stone and Charcoal, almost touching
+const WC_D = new Path2D('M34.5 0H38a20 20 0 0 1 0 40h-3.5A2.5 2.5 0 0 1 32 37.5v-35A2.5 2.5 0 0 1 34.5 0Z');
+function wcMark(g, cx, cy, h){ const k = h/40; g.save(); g.translate(cx - 29*k, cy - 20*k); g.scale(k, k); g.fillStyle = '#c8b19e'; g.beginPath(); g.roundRect(0, 0, 26, 40, 12); g.fill(); g.fillStyle = '#4b4644'; g.fill(WC_D); g.restore(); }
 function heart2d(g,cx,cy,s){ g.beginPath(); g.moveTo(cx,cy+s*.42); g.bezierCurveTo(cx-s*1.15,cy-s*.35,cx-s*.5,cy-s*1.05,cx,cy-s*.42); g.bezierCurveTo(cx+s*.5,cy-s*1.05,cx+s*1.15,cy-s*.35,cx,cy+s*.42); g.fill(); }
 
 let NO_STATUS = false;
@@ -905,6 +943,44 @@ function drawCall(rec, secs, t){
     callIcons[icon](x, y, icon === 'end' ? 46 : 40); ui.globalAlpha = 1;
     ui.fillStyle = '#fff'; ui.font = `500 22px ${SF}`; ui.fillText(label, x, y + r + 26);
   });
+}
+// An incoming call while the phone is unlocked: the Dynamic Island grows into the call banner (caller, decline,
+// accept), the green button takes the tap, and the banner opens out into the full-screen call. p: 0 → 1 over the ring.
+const SNAP_C = document.createElement('canvas'); SNAP_C.width = UW; SNAP_C.height = UH;
+const HANDSET = new Path2D('M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z');
+function drawIncoming(p){
+  HOME.pressed = ''; drawHome(0);
+  const iw = ISLAND.w*UW, ih = ISLAND.h*UH, icx = ISLAND.cx*UW, iy = ISLAND.cy*UH - ih/2;
+  const grow = 1 - Math.pow(1 - smooth(0, .14, p), 3), open = easeIO(smooth(.74, 1, p));
+  const BX = 11*PT, BW = UW - 22*PT, BH = 86*PT, BR = 43*PT;
+  let x = lerp(icx - iw/2, BX, grow), y = iy, w = lerp(iw, BW, grow), h = lerp(ih, BH, grow), r = lerp(ih/2, BR, grow);
+  x = lerp(x, 0, open); y = lerp(y, 0, open); w = lerp(w, UW, open); h = lerp(h, UH, open); r = lerp(r, 55*PT, open);
+  if (open > 0){ ui.fillStyle = `rgba(0,0,0,${.4*open})`; ui.fillRect(0, 0, UW, UH); }
+  ui.save(); rr(x, y, w, h, r); ui.clip();
+  ui.fillStyle = '#000'; ui.fillRect(x, y, w, h);
+  if (open > 0){ ui.globalAlpha = smooth(.76, .93, p); ui.drawImage(SNAP_C, 0, 0); ui.globalAlpha = 1; }
+  const ca = smooth(.08, .16, p)*(1 - smooth(.74, .79, p));
+  if (ca > 0){
+    ui.globalAlpha = ca;
+    const cy = y + h/2, ax = x + 14*PT + 26*PT;
+    // monogram, the way iOS shows a contact without a photo
+    const mg = ui.createLinearGradient(0, cy - 26*PT, 0, cy + 26*PT); mg.addColorStop(0, '#a5a5aa'); mg.addColorStop(1, '#6e6e73');
+    ui.fillStyle = mg; ui.beginPath(); ui.arc(ax, cy, 26*PT, 0, Math.PI*2); ui.fill();
+    ui.fillStyle = '#fff'; ui.font = `600 ${24*PT}px ${SF}`; ui.textAlign = 'center'; ui.textBaseline = 'middle'; ui.fillText(CALL.name[0], ax, cy + 1);
+    ui.textAlign = 'left'; ui.fillStyle = 'rgba(235,235,245,.6)'; ui.font = `400 ${14*PT}px ${SF}`; ui.fillText('mobile', ax + 38*PT, cy - 11*PT);
+    ui.fillStyle = '#fff'; ui.font = `600 ${18*PT}px ${SF}`; ui.fillText(CALL.name, ax + 38*PT, cy + 11*PT);
+    const R = 23*PT, okX = x + w - 14*PT - R, noX = okX - 2*R - 14*PT;
+    const press = smooth(.63, .67, p)*(1 - smooth(.71, .75, p));
+    const btn = (bx, col, path, sz, k) => {
+      ui.save(); ui.translate(bx, cy); ui.scale(k, k);
+      ui.fillStyle = col; ui.beginPath(); ui.arc(0, 0, R, 0, Math.PI*2); ui.fill();
+      ui.fillStyle = '#fff'; ui.translate(-sz/2, -sz/2); ui.scale(sz/24, sz/24); ui.fill(path); ui.restore();
+    };
+    btn(noX, '#ff3b30', iconPaths.end, 30*PT, 1);
+    btn(okX, press > 0 ? '#5fd97d' : '#34c759', HANDSET, 24*PT, 1 - .12*press);
+    ui.globalAlpha = 1;
+  }
+  ui.restore();
 }
 // ---------- Recents app (dark, iOS-native) ----------
 const PT = UW/440; // px per point on a 440 × 956 pt display
@@ -1206,7 +1282,7 @@ function appIcon(kind, x, y, s){
   switch (kind){
     case 'recents': fill('#121316'); g.fillStyle = '#ffb547'; for (let i=0;i<7;i++){ const h = s*(.12 + .3*Math.abs(Math.sin(i*1.9 + 1))); rr(x - s*.3 + i*s*.1, y - h/2, s*.055, h, s*.03); g.fill(); } break;
     case 'internat': g.fillStyle = grad('#10b981', '#047857'); rr(x - s/2, y - s/2, s, s, r); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = s*.06; g.lineJoin = 'round'; rr(x - s*.17, y - s*.27, s*.34, s*.54, s*.04); g.stroke(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x + s*.08, y + s*.02, s*.045, 0, Math.PI*2); g.fill(); break;
-    case 'wear': fill('#efe7da'); g.fillStyle = '#c97462'; heart2d(g, x, y + s*.04, s*.3); break;
+    case 'wear': fill('#f3ece2'); wcMark(g, x, y, s*.42); break; // the app icon: the mark on a cream tile, 42% tall
     case 'cal': fill('#ffffff'); g.fillStyle = '#ff3b30'; g.font = `600 ${s*.15}px ${SF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SUN', x, y - s*.26); g.fillStyle = '#111'; g.font = `300 ${s*.48}px ${SF}`; g.fillText('5', x, y + s*.1); break;
     case 'photos': fill('#ffffff'); ['#f9b233','#f26b3a','#e5426f','#a54bd2','#4a7cf0','#34b2e4','#4ac57b','#b3d334'].forEach((c,i) => { g.save(); g.translate(x, y); g.rotate(i*Math.PI/4); g.fillStyle = c; g.globalAlpha = .85; g.beginPath(); g.ellipse(0, -s*.17, s*.09, s*.17, 0, 0, Math.PI*2); g.fill(); g.restore(); }); break;
     case 'clock': fill('#111'); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, s*.38, 0, Math.PI*2); g.fill(); g.strokeStyle = '#111'; g.lineWidth = s*.035; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - s*.25); g.moveTo(x, y); g.lineTo(x + s*.17, y + s*.06); g.stroke(); g.strokeStyle = '#ff9500'; g.lineWidth = s*.015; g.beginPath(); g.moveTo(x, y + s*.08); g.lineTo(x - s*.05, y - s*.3); g.stroke(); break;
@@ -1290,10 +1366,13 @@ function drawGoHome(p, t){
 // 134 × 5 pt, 8 pt above the bottom edge; white on dark content, black on light
 function homeIndicator(dark){ ui.fillStyle = dark ? '#ffffff' : '#000000'; rr(UW/2 - 67*PT, UH - 13*PT, 134*PT, 5*PT, 2.5*PT); ui.fill(); }
 
-let uiKey = '', lastKind = '';
+let uiKey = '', lastKind = '', kindSeen = '', callT0 = 0;
 function renderUI(kind, p, now){
-  const t = now/1000, secs = 252 + Math.floor(t)%600;
-  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
+  // the call clock starts at 00:00 when the call is picked up
+  if (kind === 'call' && kindSeen !== 'call') callT0 = now;
+  kindSeen = kind;
+  const t = now/1000, secs = Math.floor((now - callT0)/1000);
+  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='ring' ? `r${Math.round(p*240)}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
   const kk = k + hhmm(clock.shown);
   if (kk === uiKey) return;
   uiKey = kk;
@@ -1305,9 +1384,11 @@ function renderUI(kind, p, now){
     else { Object.assign(TRANS, {from:'wear', to:'internat', toDark:false}); snapshot(SNAP_A, () => drawPulse(2, t)); snapshot(SNAP_B, () => drawInternat(0, t)); }
     NO_STATUS = false;
   }
+  if (kind === 'ring' && lastKind !== 'ring') snapshot(SNAP_C, () => drawCall(0, 0, t));
   lastKind = kind;
   if (kind==='off'){ ui.fillStyle = '#000'; ui.fillRect(0, 0, UW, UH); }
   else if (kind==='idle'){ HOME.pressed = ''; drawHome(0); }
+  else if (kind==='ring') drawIncoming(p);
   else if (kind==='call') drawCall(p, secs, t);
   else if (kind==='transcript') drawTranscript(p);
   else if (kind==='ask') drawAsk(p, t);
@@ -1321,8 +1402,8 @@ function renderUI(kind, p, now){
 function drawNotif(){
   nc.clearRect(0,0,720,196);
   nc.fillStyle = 'rgba(247,244,239,.96)'; nc.beginPath(); nc.roundRect(4,4,712,188,46); nc.fill();
-  nc.fillStyle = '#e4dccd'; nc.beginPath(); nc.roundRect(30,42,112,112,28); nc.fill();
-  nc.fillStyle = '#1b1a18'; heart2d(nc, 86, 104, 30);
+  nc.fillStyle = '#f3ece2'; nc.beginPath(); nc.roundRect(30,42,112,112,28); nc.fill();
+  wcMark(nc, 86, 98, 47);
   nc.fillStyle = '#7d776c'; nc.font = `600 22px ${SF}`; nc.letterSpacing = '4px'; nc.textBaseline = 'middle';
   nc.fillText('WEAR CLOSE', 170, 70); nc.letterSpacing = '0px';
   nc.textAlign = 'right'; nc.font = `400 22px ${SF}`; nc.fillText('now', 680, 70); nc.textAlign = 'left';
@@ -1405,6 +1486,7 @@ function dimension(el, pa, pb, label, sub){
 const slotM = new THREE.Matrix4(), slotP = new THREE.Vector3(), slotQ = new THREE.Quaternion(), slotS = new THREE.Vector3(), stageInv = new THREE.Matrix4(), tmpV = new THREE.Vector3();
 const landP = new THREE.Vector3(), landQ = new THREE.Quaternion(), landS = new THREE.Vector3();
 const IN_WALL_FROM = -1.0, LEAVE = 3.02, LANDED = 3.95; // stage time (real story time − 2)
+const RING_AT = 2.78, ANSWERED = 3.9; // the call rings from just before it leaves the wall and is answered as it lands
 let slotIdx = -1;
 function setHiddenSlot(i){ if (i === hiddenSlot) return; const old = hiddenSlot; hiddenSlot = i; if (old >= 0) place(old); if (i >= 0) place(i); bodies.instanceMatrix.needsUpdate = screens.instanceMatrix.needsUpdate = cables.instanceMatrix.needsUpdate = true; }
 function pickSlot(){
@@ -1429,12 +1511,20 @@ function pickSlot(){
     if (d < best){ best = d; slotIdx = i; }
   }
 }
-function emergeFromWall(st){
-  if (st < IN_WALL_FROM || st > 9.6){ setHiddenSlot(-1); return; }
+// runs every frame, stage or not: the slot is empty from the moment the iPhone is in it until the replacement docks
+const REFILL_FROM = 9.85, REFILL_TO = 10.35; // stage time: once the iPhone has gone for good and the camera has settled on the board
+function updateSlot(st){
+  if (st < IN_WALL_FROM){ setHiddenSlot(-1); uniforms.uNewOn.value = 1; return; }
   if (slotIdx < 0) pickSlot();
   if (slotIdx < 0) return;
   setHiddenSlot(slotIdx);
-  if (st > LANDED) return;
+  const r = clamp01((st - REFILL_FROM)/(REFILL_TO - REFILL_FROM));
+  if (r !== refill){ refill = r; place(slotIdx); bodies.instanceMatrix.needsUpdate = screens.instanceMatrix.needsUpdate = cables.instanceMatrix.needsUpdate = true; }
+  // its screen stays dark in the air and boots once it's plugged in
+  uniforms.uNewId.value = slotIdx; uniforms.uNewOn.value = smooth(.87, .97, r);
+}
+function emergeFromWall(st){
+  if (st < IN_WALL_FROM || st > LANDED || slotIdx < 0) return;
   // slot pose, in the stage's frame (the wall and the stage move with the camera differently)
   camera.updateMatrixWorld(true); wall.updateMatrixWorld(true);
   const b = base[slotIdx];
@@ -1470,6 +1560,10 @@ function updateStage(st, now){
   phone.visible = st >= IN_WALL_FROM && st < 9.58;
   pose(PHONE_KEYS, st, phone);
   emergeFromWall(st);
+  // ringing: it buzzes in bursts, in the wall and on its way out, until it's answered
+  if (!reduced && st > RING_AT + .04 && st < RING_AT + (ANSWERED - RING_AT)*.64 && (t*1.15) % 1 < .55){
+    const a = .005*phone.scale.x; phone.position.x += Math.sin(t*190)*a; phone.position.y += Math.cos(t*157)*a*.6;
+  }
   // idle float, except during the dead-on profile where it has to hold perfectly still
   const still = smooth(4.57, 4.6, st)*(1 - smooth(4.68, 4.71, st));
   if (!reduced && !inWall){ phone.position.y += Math.sin(t*1.1)*.018*(1-still); phone.rotation.z += Math.sin(t*.8)*.012*(1-still); }
@@ -1515,9 +1609,11 @@ function updateStage(st, now){
   }
 
   // screen content
-  // in the wall: screen off behind the name, home screen among the working Androids, then the call
+  // in the wall: screen off behind the name, home screen among the working Androids, then a call comes in (it's
+  // why the phone leaves the wall); it's answered on the way out
   if (st < 1.0) renderUI('off', 0, now);
-  else if (st < LEAVE) renderUI('idle', 0, now);
+  else if (st < RING_AT) renderUI('idle', 0, now);
+  else if (st < ANSWERED) renderUI('ring', clamp01((st - RING_AT)/(ANSWERED - RING_AT)), now);
   else if (st < 4.7) renderUI('call', st >= SNAP ? on : 0, now);
   else if (st < 4.86) renderUI('transcript', smooth(4.72, 4.86, st), now);
   else if (st < 5.04) renderUI('ask', clamp01((st-4.86)/.17), now);
@@ -1698,6 +1794,61 @@ const hTime = document.getElementById('hTime'), hShift = document.getElementById
 // the room is always lit for night (one tuned look); only the HUD clock follows real Prague time
 const NIGHT = 1.5;
 
+// ---------- pacing ----------
+// The stage's beats are authored in stage time, but what the visitor feels is scroll distance. Each scroll region
+// the stage plays across lists its beats as [authored from, authored to, vh]: how much scrolling the beat deserves
+// for what there is to watch or read in it, so actions move at one even speed down the page. A hold's section is
+// exactly as long as its beats add up to (plus the screen it pins on); a transition is always one screen, so its
+// beats add up to 100. Regions are linear stage time (real story time − 2) and must join up end to end.
+const PACE = [
+  { region: 4, sec: 'c3', beats: [ // Recents
+    [4.0, 4.03, 25],    // the call, just answered, face on
+    [4.03, 4.15, 40],   // the card glides in while the phone turns its back
+    [4.15, 4.33, 55],   // hover over the back, the magnet takes it
+    [4.33, 4.43, 30],   // snap, recording rings
+    [4.43, 4.56, 25],   // swing towards the side
+    [4.56, 4.6, 15],    // settle dead on the profile
+    [4.6, 4.68, 100],   // 2.9 mm against the 4.2 mm camera bump
+    [4.68, 4.79, 45],   // back to the front, the call ends
+    [4.79, 4.86, 75],   // the transcript fills in
+    [4.86, 4.918, 40],  // typing the question
+    [4.918, 4.935, 15], // sent
+    [4.935, 4.986, 80], // the answer writes itself out
+    [4.986, 5.04, 60]   // its sources, time to read
+  ] },
+  { region: 5, beats: [[5.04, 5.3, 50], [5.3, 6.0, 50]] }, // home, open Wear Close; the bracelets arrive
+  { region: 6, sec: 'c4', beats: [ // Wear Close
+    [6.0, 6.22, 45],    // "Bring your phone to your bracelet"
+    [6.22, 6.42, 50],   // the tap, sending
+    [6.42, 6.56, 35],   // it lands on Zuzka's wrist
+    [6.56, 7.0, 80]     // she felt it
+  ] },
+  { region: 7, beats: [[7.0, 7.36, 35], [7.36, 7.64, 45], [7.64, 7.75, 20]] }, // back to centre, home, open Internát
+  { region: 8, sec: 'c5', beats: [ // Internát (its demo runs 7.64 → 8.94; p = (t − 7.64)/1.3)
+    [7.75, 7.822, 30],  // tap Extend
+    [7.822, 7.887, 25], // the sheet comes up
+    [7.887, 8.212, 120],// pick 22:00, pick Mom, send
+    [8.212, 8.342, 50], // sent, the sheet goes
+    [8.342, 8.602, 70], // waiting for Mom, her approval comes in
+    [8.602, 8.94, 60],  // approved until 22:00
+    [8.94, 9.0, 15]
+  ] }
+];
+const PACE_AT = {};
+for (const r of PACE){
+  r.total = r.beats.reduce((s, b) => s + b[2], 0);
+  PACE_AT[r.region] = r;
+  if (r.sec) document.getElementById(r.sec).style.setProperty('--len', r.total + 100);
+}
+// linear stage time (from the scroll) → authored stage time
+function paced(lin){
+  const r = PACE_AT[Math.floor(lin)];
+  if (!r) return lin;
+  const f = (lin - Math.floor(lin))*r.total; let acc = 0;
+  for (const [a, b, vh] of r.beats){ if (f <= acc + vh) return a + (b - a)*(f - acc)/vh; acc += vh; }
+  return r.beats[r.beats.length - 1][1];
+}
+
 // ---------- scroll → story ----------
 const secs = [...document.querySelectorAll('.ch')];
 let tops = [], heights = [];
@@ -1815,7 +1966,8 @@ const MILESTONES = [
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:['TASKER', 'PROJECTS.COM'] },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:['MATIONX', 'SINCE AUG 2025'] },
   { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:['SSPŠ', 'SMÍCHOVSKÁ'] },
-  { date:'Nov 2025', title:'mationx.cloud', text:'An API, so other software can drive the phones too.', wall:['.CLOUD', 'THE API'] },
+  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:['28', 'VIDEOS ON YOUTUBE'] },
+  { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:['STUDIO', 'LIVE SINCE 1 MAY 2026'] },
   { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:['2ND', 'OF 80'] },
   { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', wall:['500+', 'PHONES ONLINE'] }
 ];
@@ -1901,7 +2053,9 @@ function frame(now){
   amb.intensity *= 1 - .95*deskP; key.intensity *= 1 - deskP; rim.intensity *= 1 - deskP;
   desk.update(st, now, {x:pmx*pm, y:pmy*pm}, reduced);
   flashEl.style.opacity = (smooth(.9, 1.0, st)*(1 - smooth(1.0, 1.14, st))*.9).toFixed(3);
-  updateStage(st - 2, now);
+  const stageT = paced(st - 2);
+  updateSlot(stageT);
+  updateStage(stageT, now);
 
   // hover via raycast (off while the stage owns the frame)
   let h = -1;
@@ -1988,13 +2142,26 @@ function frame(now){
 }
 
 // finale reel media
-['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
+// the school photos are graded: mostly grey with a cool cast like the wall's ink, a little more contrast
+function grade(im, sat){
+  const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+  const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
+  for (let i = 0; i < p.length; i += 4){
+    const l = (.299*p[i] + .587*p[i+1] + .114*p[i+2] - 128)*1.12 + 120;
+    p[i] = l*.9*(1 - sat) + p[i]*sat; p[i+1] = l*.96*(1 - sat) + p[i+1]*sat; p[i+2] = l*1.06*(1 - sat) + p[i+2]*sat;
+  }
+  g.putImageData(d, 0, 0); return c;
+}
+const GRADE = { school: .28, director: .28 };
+['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
 { const v = document.createElement('video'); v.src = '/media/pitch.mp4'; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('playsinline', ''); REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"', '400 64px Michroma', '400 20px Outfit', '700 20px Outfit', '900 20px Outfit'].map(f => document.fonts.load(f))).catch(()=>{})
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
+if (SHOT) window.__ui = () => UI.toDataURL('image/png'); // headless checks read the iPhone's screen directly
 function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
   return into <= 1 ? tops[i] + into*hold : tops[i] + hold + (into-1)*innerHeight;
