@@ -12,7 +12,6 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import './style.css';
 
-const GROUP_IMG = '/group.png';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fine = matchMedia('(pointer: fine)').matches;
 const clamp01 = v => v<0 ? 0 : v>1 ? 1 : v;
@@ -113,18 +112,48 @@ function paintName(){
   else { nameG.font = `900 ${size*.9}px "Big Shoulders Display", Impact, sans-serif`; nameG.fillText('PETR', w/2, h*.17); nameG.fillText('KYNČL', w/2, h*.39); }
   nameTex.needsUpdate = true;
 }
-// Finale: the hackathon group photo on the wall. On a tall wall it's cropped around me (far right, ME_X).
-const ME_X = .884;
+// Finale reel on the wall, in colour: the pitch (video), the prize, the group photo. Painted into the face canvas.
+// On a wide wall it sits right of the copy column; on a tall wall in the top part (the copy covers the bottom).
+const REEL = { video: null, kate: null, prize: null, group: null };
+const ME_IN_GROUP = { x: .828, y: .14 }; // my head in group.jpg (far right, light hoodie)
 let meUV = null;
-function paintFace(img){
-  const w=faceC.width, h=faceC.height;
-  faceG.fillStyle='#000'; faceG.fillRect(0,0,w,h);
-  // tall wall: copy covers the lower half on phones, so the photo sits in the top part
-  const s = land ? Math.min(w/img.width, h*1.02/img.height) : h*.42/img.height, dw=img.width*s, dh=img.height*s;
-  const x = dw <= w ? (w-dw)/2 : Math.min(0, Math.max(w-dw, w/2 - ME_X*dw)), y = land ? h-dh : h*.03;
-  faceG.drawImage(img,x,y,dw,dh);
-  meUV = {u:(x + ME_X*dw)/w, v:1 - y/h};
+// (the camera sees roughly u .25–.8 of the wall right of the copy, so the reel stays inside that)
+function reelRegion(){ const w = faceC.width, h = faceC.height; return land ? { x: w*.3, y: h*.06, w: w*.47, h: h*.88 } : { x: 0, y: h*.03, w, h: h*.44 }; }
+// cover-fit src into the region around a focus point; returns the drawn rect
+function coverInto(src, sw, sh, r, fx, fy){
+  const s = Math.max(r.w/sw, r.h/sh), dw = sw*s, dh = sh*s;
+  const x = Math.min(r.x, Math.max(r.x + r.w - dw, r.x + r.w/2 - fx*dw)), y = Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h/2 - fy*dh));
+  faceG.save(); faceG.beginPath(); faceG.rect(r.x, r.y, r.w, r.h); faceG.clip(); faceG.drawImage(src, x, y, dw, dh); faceG.restore();
+  return { x, y, w: dw, h: dh };
+}
+function containInto(src, sw, sh, r){
+  const s = Math.min(r.w/sw, r.h/sh), dw = sw*s, dh = sh*s, x = r.x + (r.w - dw)/2, y = land ? r.y + r.h - dh : r.y;
+  faceG.drawImage(src, x, y, dw, dh); return { x, y, w: dw, h: dh };
+}
+function drawReelItem(k){
+  const r = reelRegion();
+  if (k === 0 && REEL.video && REEL.video.readyState >= 2) coverInto(REEL.video, REEL.video.videoWidth, REEL.video.videoHeight, r, .3, .45);
+  else if (k === 1 && REEL.kate) coverInto(REEL.kate, REEL.kate.width, REEL.kate.height, r, .47, .4);
+  else if (k === 2 && REEL.prize) coverInto(REEL.prize, REEL.prize.width, REEL.prize.height, r, .55, .4);
+  else if (k === 3 && REEL.group){
+    const d = containInto(REEL.group, REEL.group.width, REEL.group.height, r);
+    meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
+  }
+}
+// which item, and how far the sweep to the next one has got (left to right, soft edge)
+const REEL_AT = [14.0, 14.3, 14.54, 14.78], REEL_SWEEP = .07; // pitch, talking it through after, the prize, everyone
+function paintReel(st){
+  const w = faceC.width, h = faceC.height;
+  let k = 0; while (k < REEL_AT.length - 1 && st >= REEL_AT[k+1]) k++;
+  const next = Math.min(k + 1, REEL_AT.length - 1), f = next > k ? clamp01((st - (REEL_AT[next] - REEL_SWEEP))/REEL_SWEEP) : 0;
+  faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h);
+  drawReelItem(k);
+  if (f > 0){
+    const r = reelRegion(), edge = r.x + (r.w + 80)*f - 40;
+    faceG.save(); faceG.beginPath(); faceG.rect(0, 0, edge, h); faceG.clip(); faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h); drawReelItem(next); faceG.restore();
+  }
   faceTex.needsUpdate = true;
+  return (f > .5 ? next : k);
 }
 const N = new THREE.Vector3();
 function wallPoint(u, v, out){
@@ -158,7 +187,7 @@ screenGeo.setAttribute('aDelay', new THREE.InstancedBufferAttribute(aDelay,1));
 const uniforms = {
   uTime:{value:0}, uWall:{value:1}, uFrom:{value:9}, uTo:{value:9}, uSweep:{value:0},
   uHover:{value:-1}, uBoot:{value:reduced?1.1:0}, uGrid:{value:new THREE.Vector2(C,R)},
-  uName:{value:nameTex}, uFace:{value:faceTex}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
+  uName:{value:nameTex}, uFace:{value:faceTex}, uFaceColor:{value:1}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
   uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0}
 };
 
@@ -174,7 +203,7 @@ const screenMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * mv;
     }`,
   fragmentShader:`
-    uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe;
+    uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe, uFaceColor;
     uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB; uniform vec3 uRoom;
     varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
     const float ASP = ${(SH/SW).toFixed(4)};
@@ -528,15 +557,19 @@ const screenMat = new THREE.ShaderMaterial({
       float iB = uImgTo < .5 ? nm : (uImgTo < 1.5 ? bd : fl);
       float img = mix(iA, iB, step(vDelay, uImgWipe));
       vec2 pg = fract(vUv*vec2(54.0,112.0));
-      img *= .74 + .26*step(.18,pg.x)*step(.18,pg.y);
+      float grid = .74 + .26*step(.18,pg.x)*step(.18,pg.y);
+      img *= grid;
+      // the hackathon reel shows in colour; name and board stay as ink
+      float useFc = step(1.5, step(vDelay, uImgWipe) > .5 ? uImgTo : uImgFrom)*uFaceColor;
       float glitch = step(.985, hash(vId*.37 + floor(uTime*3.0)));
       // hovering a phone in an image (name, board, photo) lifts it out of the picture to show what it's running
-      float wm = smoothstep(vDelay, vDelay+.2, uWall*1.25) * (1.0 - glitch*.85*step(.99,uWall)) * (1.0 - isHover);
+      float wm = smoothstep(vDelay, vDelay+.2, uWall*1.25) * (1.0 - glitch*.85*step(.99,uWall)*(1.0 - uFaceColor*step(1.5, uImgTo))) * (1.0 - isHover); // no glitching through the photo reel
 
       vec3 bg = vec3(.028,.036,.058);
       vec3 ink = vec3(.82,.88,1.0) * (.88 + .16*hash(vId*1.3));
       vec3 ac = typ > 6.5 ? automation(q, t, vSeed) : ((typ > 2.5 && typ < 3.5) ? chatApp(q, t, vSeed, 0.0) : bg + (ink-bg)*a);
-      vec3 col = mix(ac*mix(1.0, .3, uWall*(1.0 - isHover)), bg + (ink-bg)*img*1.05, wm);
+      vec3 imgCol = mix(bg + (ink-bg)*img*1.05, mix(bg, fc*.92, grid), useFc);
+      vec3 col = mix(ac*mix(1.0, .3, uWall*(1.0 - isHover)), imgCol, wm);
       col = mix(col, vec3(0.0), step(q0.y, NAV)*(1.0 - wm));
       col *= .92 + .08*sin(vUv.y*620.0 + uTime*6.0);
       col *= mix(.78, 1.0, smoothstep(0.0, .06, -dEdge));
@@ -1577,7 +1610,7 @@ function storyAt(y){
   const V = innerHeight; let i = 0;
   while (i < secs.length-1 && y >= tops[i+1]) i++;
   const hold = Math.max(0, heights[i]-V), into = y - tops[i];
-  if (i === secs.length-1) return {prog:i, st:2*i+1};
+  if (i === secs.length-1) return {prog:i, st:2*i + clamp01(into/Math.max(1, hold))}; // the last section holds too
   if (into < hold) return {prog:i, st:2*i + into/hold};
   const f = clamp01((into-hold)/V);
   return {prog:i+f, st:2*i+1+f};
@@ -1774,7 +1807,9 @@ function frame(now){
   } else { sel.style.opacity = 0; cross.style.opacity = (fine && !reduced && ndc.x<2) ? (overLink ? .35 : .9) : 0; }
 
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
-  const meOn = meUV && a===S-2 && loc > .9;
+  const reelK = st > 12.6 ? paintReel(st) : -1;
+  if (REEL.video){ const want = st > 12.6 && st < 15.2; if (want && REEL.video.paused) REEL.video.play().catch(()=>{}); else if (!want && !REEL.video.paused) REEL.video.pause(); }
+  const meOn = meUV && a===S-2 && loc > .9 && reelK === 3;
   if (meOn){
     wallPoint(meUV.u, meUV.v, corner).applyMatrix4(wall.matrixWorld).project(camera);
     meEl.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${Math.max(56, (-corner.y*.5+.5)*innerHeight)}px) translate(-50%,-100%)`;
@@ -1804,9 +1839,9 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
-const img = new Image();
-img.onload = () => paintFace(img);
-img.src = GROUP_IMG;
+// finale reel media
+['kate', 'prize', 'group'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = im; }; im.src = `/media/${n}.jpg`; });
+{ const v = document.createElement('video'); v.src = '/media/pitch.mp4'; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('playsinline', ''); REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"', '400 64px Michroma', '400 20px Outfit', '700 20px Outfit', '900 20px Outfit'].map(f => document.fonts.load(f))).catch(()=>{})
   : Promise.resolve();
