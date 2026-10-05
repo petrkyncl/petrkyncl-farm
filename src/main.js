@@ -91,17 +91,21 @@ function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
   g.fillStyle = '#000'; g.fillRect(0,0,w,h);
   if (lines && lines.length){
-    // first line huge, the caption small and tracked out underneath; both fit right of the copy column
-    const [big, small] = lines, cx = land ? w*.56 : w/2, maxW = w*(land ? .44 : .86);
+    // the date huge, stacked like a calendar page when it has two words (AUG over 2025), the caption tracked out
+    // underneath; all of it right of the copy column
+    const [big, small] = lines, cx = land ? w*.56 : w/2, maxW = w*(land ? .46 : .86);
     const font = (s, wt) => `${wt} ${s}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-    let bs = h*(land ? .52 : .3); g.font = font(bs, 900);
-    const bw = g.measureText(big).width; if (bw > maxW){ bs *= maxW/bw; g.font = font(bs, 900); }
-    const by = land ? h*.6 : h*.3; g.fillText(big, cx, by);
+    const rows = land ? big.split(' ') : [big]; // a tall screen has only a strip of wall above the copy: one row there
+    // one size for every row: the largest that lets the widest row fit and the stack fit the wall's height
+    let bs = h*(land ? (rows.length > 1 ? .4 : .5) : .11); g.font = font(bs, 900);
+    const widest = Math.max(...rows.map(r => g.measureText(r).width)); if (widest > maxW){ bs *= maxW/widest; g.font = font(bs, 900); }
+    const lh = bs*.86, top = (land ? h*.5 : h*.09) - (rows.length - 1)*lh/2 + bs*.34; // on a tall screen the copy covers the lower wall
+    rows.forEach((r, i) => g.fillText(r, cx, top + i*lh));
     if (small){
-      let ss = bs*.17; g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*.22).toFixed(1)}px`;
+      let ss = h*(land ? .052 : .024); g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*.2).toFixed(1)}px`;
       const sw = g.measureText(small).width; if (sw > maxW){ ss *= maxW/sw; g.font = font(ss, 700); }
-      g.fillText(small, cx, by + ss*1.9);
+      g.fillText(small, cx, top + (rows.length - 1)*lh + ss*2.2);
       if ('letterSpacing' in g) g.letterSpacing = '0px';
     }
   }
@@ -2253,22 +2257,22 @@ document.getElementById('hDev').textContent = COUNT;
 // ---------- "So far" ----------
 const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:2}, {t:7}]; // … board, school reel (then letters), hackathon reel; at the close the phones just keep working behind him
 // The timeline is data: add a milestone here and the chapter grows (its scroll length scales with the count).
-// wall: [big, small] is what the phone wall spells out for it.
+// The wall spells out the date big (it's the point of a timeline) with the caption under it.
 const MILESTONES = [
-  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, about $1,000.', wall:['31', 'FIVERR ORDERS'] },
-  { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:['TASKER', 'PROJECTS.COM'] },
-  { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:['MATIONX', 'SINCE AUG 2025'] },
-  { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:['SSPŠ', 'SMÍCHOVSKÁ'] },
-  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:['28', 'VIDEOS ON YOUTUBE'] },
-  { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:['STUDIO', 'LIVE SINCE 1 MAY 2026'] },
-  { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:['2ND', 'OF 80'] },
-  { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', wall:['500+', 'PHONES ONLINE'] }
+  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, about $1,000.', cap:'FIVERR · 31 ORDERS' },
+  { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', cap:'TASKERPROJECTS.COM' },
+  { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', cap:'MATIONX' },
+  { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', cap:'SMÍCHOVSKÁ' },
+  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', cap:'YOUTUBE · 28 VIDEOS' },
+  { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', cap:'MATIONX STUDIO' },
+  { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', cap:'2ND OF 80 · CURSOR HACKATHON' },
+  { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', cap:'500+ PHONES ONLINE' }
 ];
 const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts holding
 const tlList = document.querySelector('.tl-list'), tlEl = document.querySelector('.tl');
 tlList.innerHTML = MILESTONES.map(m => `<li><span class="tl-date">${m.date}</span><span class="tl-title">${m.title}</span><span class="tl-text">${m.text}</span></li>`).join('');
 document.getElementById('c6').style.setProperty('--len', 160 + MILESTONES.length*45);
-const ROAD = [...tlList.children].map((li, i) => ({ li, wall: MILESTONES[i].wall }));
+const ROAD = [...tlList.children].map((li, i) => ({ li, wall: [MILESTONES[i].date.toUpperCase(), MILESTONES[i].cap] }));
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
   const k = Math.max(0, Math.min(ROAD.length-1, Math.floor((st - ROAD_ST)*ROAD.length)));
