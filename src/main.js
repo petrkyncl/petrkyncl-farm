@@ -1298,6 +1298,148 @@ function drawInternat(p, t){
     ui.fillStyle = '#2b3646'; ui.font = `400 19px ${SF}`; ui.fillText('You can stay out until 22:00.', 124, y + 80);
   }
 }
+// ---------- Wear Close, the real flow ----------
+// You're on the home screen, you bring the phone to your bracelet, iOS reads its NFC tag in the background and offers
+// "Open in Wear Close". Tap it, and the app opens on Zuzka: send a pulse, with a photo and a note if you like. It
+// lands on her bracelet's phone, and the moment is kept in Memories (with her pulses, a capsule she left, milestones).
+const WC = { cream:'#f4eee4', ink:'#1b1714', stone:'#6e645b', mute:'#a39889', line:'#e3d9cb', pulse:'#c4473c', shell:'#ebe2d4' };
+// the photo that goes with the pulse: a sunset over water (no faces; it's somebody's evening, not a stock person)
+const WC_PHOTO = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 320; const g = c.getContext('2d');
+  const sky = g.createLinearGradient(0, 0, 0, 205); sky.addColorStop(0, '#f6cba8'); sky.addColorStop(.6, '#e8907b'); sky.addColorStop(1, '#a0718f'); g.fillStyle = sky; g.fillRect(0, 0, 320, 205);
+  g.fillStyle = '#ffe3b9'; g.beginPath(); g.arc(205, 176, 32, 0, Math.PI*2); g.fill();
+  const sea = g.createLinearGradient(0, 205, 0, 320); sea.addColorStop(0, '#7d5f80'); sea.addColorStop(1, '#3c3450'); g.fillStyle = sea; g.fillRect(0, 205, 320, 115);
+  g.fillStyle = 'rgba(255,216,172,.5)'; for (let i = 0; i < 9; i++) g.fillRect(205 - 28 - (9 - i)*2 + Math.sin(i*1.7)*8, 212 + i*11, 56 + (9 - i)*4, 3);
+  g.fillStyle = '#4b3b4d'; g.beginPath(); g.moveTo(0, 205); g.quadraticCurveTo(70, 158, 150, 205); g.closePath(); g.fill();
+  return c;
+})();
+const WC_NOTE = 'Miss you already';
+function wcIcon(kind, x, y, s, col){
+  const g = ui; g.save(); g.strokeStyle = col; g.fillStyle = col; g.lineWidth = s*.09; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
+  if (kind === 'mood'){ g.arc(x, y, s*.38, 0, Math.PI*2); g.stroke(); g.beginPath(); g.arc(x, y + s*.04, s*.2, Math.PI*.15, Math.PI*.85); g.stroke(); g.beginPath(); g.arc(x - s*.13, y - s*.1, s*.04, 0, Math.PI*2); g.arc(x + s*.13, y - s*.1, s*.04, 0, Math.PI*2); g.fill(); }
+  else if (kind === 'photo'){ g.roundRect(x - s*.4, y - s*.3, s*.8, s*.6, s*.08); g.stroke(); g.beginPath(); g.moveTo(x - s*.32, y + s*.2); g.lineTo(x - s*.06, y - s*.06); g.lineTo(x + s*.1, y + s*.1); g.lineTo(x + s*.2, y); g.lineTo(x + s*.32, y + s*.2); g.stroke(); g.beginPath(); g.arc(x + s*.18, y - s*.14, s*.06, 0, Math.PI*2); g.fill(); }
+  else if (kind === 'note'){ for (let i = 0; i < 3; i++){ g.moveTo(x - s*.32, y - s*.2 + i*s*.2); g.lineTo(x + s*(i === 2 ? .1 : .32), y - s*.2 + i*s*.2); } g.stroke(); }
+  else if (kind === 'voice'){ g.roundRect(x - s*.12, y - s*.38, s*.24, s*.46, s*.12); g.stroke(); g.beginPath(); g.arc(x, y - s*.06, s*.26, Math.PI*.1, Math.PI*.9); g.stroke(); g.beginPath(); g.moveTo(x, y + s*.2); g.lineTo(x, y + s*.36); g.stroke(); }
+  else if (kind === 'lock'){ g.roundRect(x - s*.28, y - s*.04, s*.56, s*.42, s*.06); g.fill(); g.beginPath(); g.arc(x, y - s*.08, s*.18, Math.PI, 0); g.stroke(); }
+  else if (kind === 'star'){ for (let i = 0; i < 10; i++){ const a = -Math.PI/2 + i*Math.PI/5, r = i % 2 ? s*.16 : s*.38; g.lineTo(x + Math.cos(a)*r, y + Math.sin(a)*r); } g.closePath(); g.fill(); }
+  g.restore();
+}
+function wcThumb(x, y, w, r){ ui.save(); rr(x, y, w, w, r); ui.clip(); ui.drawImage(WC_PHOTO, x, y, w, w); ui.restore(); }
+// the send screen. p: 0 opened → attach a photo → write a note → send → it travels → delivered
+function drawWear(p, t){
+  const g = ui, M = 30, W = UW - 2*M;
+  g.fillStyle = WC.cream; g.fillRect(0, 0, UW, UH);
+  statusBar(false, 0);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  wcMark(g, UW/2, 116, 18);
+  g.fillStyle = WC.ink; g.font = `300 84px ${SERIF}`; g.fillText('Zuzka', UW/2, 206);
+  g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('286 km away · 412 days together', UW/2, 262);
+  // the pulse
+  const cx = UW/2, cy = 500, sendK = smooth(.6, .64, p), sending = p > .64 && p < .86, done = smooth(.84, .9, p);
+  if (sending){ const k = (t*1.3) % 1; for (let i = 0; i < 3; i++){ const kk = (k + i/3) % 1; g.strokeStyle = `rgba(196,71,60,${(1 - kk)*.5})`; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 140 + kk*120, 0, Math.PI*2); g.stroke(); } }
+  g.strokeStyle = WC.ink; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 150, 0, Math.PI*2); g.stroke();
+  const beat = sending ? 1 + .06*Math.max(0, Math.sin(t*8)) : 1;
+  g.fillStyle = done > 0 ? WC.pulse : WC.shell; g.beginPath(); g.arc(cx, cy, 116*beat, 0, Math.PI*2); g.fill();
+  g.fillStyle = done > 0 ? '#fff' : WC.pulse; heart2d(g, cx, cy + 8, 50*beat);
+  g.fillStyle = WC.ink; g.font = `400 24px ${SF}`;
+  g.fillText(done > 0 ? 'Zuzka felt it.' : sending ? 'Sending your pulse…' : 'Send Zuzka a pulse', cx, 700);
+  // what can go with it
+  const chips = [['mood', 'Mood'], ['photo', 'Photo'], ['note', 'Note'], ['voice', 'Voice']], cw = (W - 3*12)/4;
+  const pressPhoto = smooth(.1, .13, p)*(1 - smooth(.16, .19, p)), pressNote = smooth(.32, .35, p)*(1 - smooth(.38, .41, p));
+  chips.forEach(([k, lb], i) => {
+    const x = M + i*(cw + 12), y = 760, on = (k === 'photo' && p > .14) || (k === 'note' && p > .36), pr = k === 'photo' ? pressPhoto : k === 'note' ? pressNote : 0;
+    g.save(); g.translate(x + cw/2, y + 52); g.scale(1 - .06*pr, 1 - .06*pr); g.translate(-(x + cw/2), -(y + 52));
+    g.fillStyle = on ? WC.ink : '#fff'; rr(x, y, cw, 104, 26); g.fill();
+    if (!on){ g.strokeStyle = WC.line; g.lineWidth = 1.5; rr(x, y, cw, 104, 26); g.stroke(); }
+    wcIcon(k, x + cw/2, y + 40, 34, on ? '#fff' : WC.ink);
+    g.fillStyle = on ? '#fff' : WC.stone; g.font = `500 18px ${SF}`; g.fillText(lb, x + cw/2, y + 80);
+    g.restore();
+  });
+  // attached: the photo, then the note being written
+  const ph = smooth(.16, .26, p), noteN = Math.floor(clamp01((p - .4)/.14)*WC_NOTE.length);
+  if (ph > 0){
+    g.globalAlpha = ph; const y = 900 + (1 - ph)*20;
+    wcThumb(M, y, 108, 20);
+    if (p > .36){
+      g.fillStyle = '#fff'; rr(M + 124, y, W - 124, 108, 20); g.fill(); g.strokeStyle = WC.line; g.lineWidth = 1.5; rr(M + 124, y, W - 124, 108, 20); g.stroke();
+      g.textAlign = 'left'; g.fillStyle = noteN ? WC.ink : WC.mute; g.font = `400 23px ${SF}`;
+      const txt = noteN ? WC_NOTE.slice(0, noteN) : 'Add a note'; g.fillText(txt, M + 148, y + 54);
+      if (p < .6 && Math.floor(t*2) % 2 === 0){ g.fillStyle = WC.pulse; g.fillRect(M + 148 + g.measureText(noteN ? txt : '').width + 3, y + 38, 2.5, 32); }
+      g.textAlign = 'center';
+    }
+    g.globalAlpha = 1;
+  }
+  // send
+  const by = 1100, bw = W;
+  if (p < .64){
+    g.save(); g.translate(UW/2, by + 42); g.scale(1 - .04*sendK*(1 - smooth(.62, .64, p)), 1 - .04*sendK*(1 - smooth(.62, .64, p)));
+    g.fillStyle = WC.ink; rr(-bw/2, -42, bw, 84, 42); g.fill();
+    g.fillStyle = '#fff'; heart2d(g, -78, 4, 15); g.font = `600 23px ${SF}`; g.fillText('Send pulse', 14, 1);
+    g.restore();
+  } else {
+    g.fillStyle = done > 0 ? WC.pulse : WC.stone; g.font = `500 20px ${SF}`;
+    g.fillText(done > 0 ? 'Delivered with a photo and a note' : 'On its way to Zuzka', UW/2, by + 42);
+  }
+  g.textAlign = 'left';
+}
+// Memories: the relationship as it builds up from the bracelets. q: 0 pushed in from the send screen → today's entry lands
+function drawMemories(q, t){
+  const g = ui, M = 30, W = UW - 2*M;
+  g.fillStyle = WC.cream; g.fillRect(0, 0, UW, UH);
+  statusBar(false, 0);
+  g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('‹ Zuzka', M, 118);
+  g.fillStyle = WC.ink; g.font = `300 64px ${SERIF}`; g.fillText('Memories', M, 192);
+  g.fillStyle = WC.stone; g.font = `400 19px ${SF}`; g.fillText('412 days · 1,284 pulses · 37 photos', M + 2, 242);
+  const land = outBack(smooth(.15, .45, q)), drop = 132*smooth(.15, .45, q);
+  const label = (txt, y) => { g.fillStyle = WC.mute; g.font = `600 15px ${SF}`; g.letterSpacing = '2px'; g.fillText(txt, M + 2, y); g.letterSpacing = '0px'; };
+  const card = (y, lead, title, sub, time) => {
+    g.fillStyle = '#fff'; rr(M, y, W, 112, 26); g.fill(); g.strokeStyle = WC.line; g.lineWidth = 1.5; rr(M, y, W, 112, 26); g.stroke();
+    lead(M + 18, y + 18);
+    g.fillStyle = WC.ink; g.font = `600 21px ${SF}`; g.fillText(title, M + 128, y + 42);
+    g.fillStyle = WC.stone; g.font = `400 18px ${SF}`; g.fillText(sub, M + 128, y + 74);
+    g.fillStyle = WC.mute; g.font = `500 17px ${SF}`; g.textAlign = 'right'; g.fillText(time, M + W - 22, y + 42); g.textAlign = 'left';
+  };
+  const tile = (bg, icon, col) => (x, y) => { g.fillStyle = bg; rr(x, y, 76, 76, 18); g.fill(); if (icon === 'heart'){ g.fillStyle = col; heart2d(g, x + 38, y + 42, 18); } else wcIcon(icon, x + 38, y + 38, 34, col); };
+  let y = 300;
+  label('TODAY', y);
+  if (land > 0){ g.save(); g.globalAlpha = Math.min(1, land); g.translate(0, (1 - land)*-40); card(y + 24, (x, yy) => wcThumb(x, yy, 76, 18), 'You sent a pulse', `“${WC_NOTE}” · with a photo`, '18:42'); g.restore(); }
+  y += drop + 40;
+  label('YESTERDAY', y); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'Zuzka sent a pulse', 'You were at work', '21:07');
+  y += 176;
+  label('THIS WEEK', y); card(y + 24, tile(WC.shell, 'lock', WC.ink), 'Zuzka left you a capsule', 'It opens on Friday', 'Tue');
+  card(y + 152, tile(WC.shell, 'star', '#b8893a'), 'Your 100th pulse', 'Since 20 August', 'Sun');
+  // tab bar
+  const tb = UH - 132, tw = 330, tx = UW/2 - tw/2;
+  g.save(); g.shadowColor = 'rgba(27,23,20,.12)'; g.shadowBlur = 30; g.shadowOffsetY = 8; g.fillStyle = 'rgba(255,255,255,.94)'; rr(tx, tb, tw, 76, 38); g.fill(); g.restore();
+  g.fillStyle = WC.shell; rr(tx + 112, tb + 6, 106, 64, 32); g.fill();
+  ['Us', 'Memories', 'Capsules'].forEach((lb, i) => { g.fillStyle = i === 1 ? WC.ink : WC.mute; g.font = `${i === 1 ? 600 : 500} 16px ${SF}`; g.textAlign = 'center'; g.fillText(lb, tx + 59 + i*106, tb + 39); });
+  g.textAlign = 'left';
+}
+// the system's NFC notification on the home screen; tapped, it opens into the app (p: in, held, tapped, opened)
+const SNAP_D = document.createElement('canvas'); SNAP_D.width = UW; SNAP_D.height = UH;
+function drawNfc(p){
+  HOME.pressed = ''; drawHome(0);
+  const inK = smooth(0, .18, p), press = smooth(.42, .47, p)*(1 - smooth(.53, .58, p)), open = easeIO(smooth(.58, 1, p));
+  const by = lerp(-170, 88, outBack(inK));
+  let x = 18, y = by, w = UW - 36, h = 128, r = 34;
+  x = lerp(x, 0, open); y = lerp(y, 0, open); w = lerp(w, UW, open); h = lerp(h, UH, open); r = lerp(r, 55*PT, open);
+  ui.save();
+  if (press > 0){ ui.translate(UW/2, by + 64); ui.scale(1 - .03*press, 1 - .03*press); ui.translate(-UW/2, -(by + 64)); }
+  ui.shadowColor = 'rgba(0,0,0,.25)'; ui.shadowBlur = 36; ui.shadowOffsetY = 10;
+  ui.fillStyle = `rgba(${Math.round(250 - 18*press)},${Math.round(250 - 18*press)},${Math.round(252 - 18*press)},.96)`; rr(x, y, w, h, r); ui.fill();
+  ui.restore();
+  if (open > 0){ ui.save(); rr(x, y, w, h, r); ui.clip(); ui.globalAlpha = smooth(.6, .82, p); ui.drawImage(SNAP_D, 0, 0); ui.restore(); ui.globalAlpha = 1; }
+  const ca = 1 - smooth(.58, .66, p);
+  if (ca > 0){
+    ui.globalAlpha = ca; ui.textBaseline = 'middle'; ui.textAlign = 'left';
+    ui.fillStyle = WC.cream; rr(40, by + 31, 66, 66, 16); ui.fill(); wcMark(ui, 73, by + 64, 26);
+    ui.fillStyle = '#1c1c1e'; ui.font = `600 20px ${SF}`; ui.fillText('NFC Tag', 124, by + 46);
+    ui.fillStyle = '#8e8e93'; ui.font = `400 16px ${SF}`; ui.textAlign = 'right'; ui.fillText('now', UW - 44, by + 46); ui.textAlign = 'left';
+    ui.fillStyle = '#2c2c2e'; ui.font = `400 19px ${SF}`; ui.fillText('Open in Wear Close', 124, by + 80);
+    ui.globalAlpha = 1;
+  }
+}
 function drawPulse(stateP, t){
   ui.fillStyle = '#f3efe8'; ui.fillRect(0,0,600,UH);
   statusBar(false, 0);
@@ -1401,12 +1543,13 @@ function appWindow(snap, icon, k){
 }
 function drawGoHome(p, t){
   const g = ui;
-  const closeK = clamp01(p/.4), openK = clamp01((p - .56)/.44);
-  const tap = smooth(.42, .48, p)*(1 - smooth(.52, .58, p));
+  // with nowhere to go (TRANS.to empty) it just closes the app and settles on the home screen
+  const closeK = TRANS.to ? clamp01(p/.4) : clamp01(p/.7), openK = TRANS.to ? clamp01((p - .56)/.44) : 0;
+  const tap = TRANS.to ? smooth(.42, .48, p)*(1 - smooth(.52, .58, p)) : 0;
   // home screen settles in from a slight zoom, and zooms again behind the opening app
   const zoom = 1 + .08*(1 - (1 - Math.pow(1 - closeK, 3))) + .08*(1 - Math.pow(1 - openK, 3));
   g.save(); g.translate(UW/2, UH/2); g.scale(zoom, zoom); g.translate(-UW/2, -UH/2);
-  HOME.pressed = TRANS.to; NO_STATUS = true; drawHome(tap); NO_STATUS = false;
+  HOME.pressed = TRANS.to || ''; NO_STATUS = true; drawHome(tap); NO_STATUS = false;
   g.restore();
   const dim = (1 - closeK)*.35 + openK*.35; if (dim > 0){ g.fillStyle = `rgba(0,0,0,${dim})`; g.fillRect(0, 0, UW, UH); }
   if (closeK < 1){
@@ -1427,7 +1570,7 @@ function renderUI(kind, p, now){
   if (kind === 'call' && kindSeen !== 'call') callT0 = now;
   kindSeen = kind;
   const t = now/1000, secs = Math.floor((now - callT0)/1000);
-  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='ring' ? `r${Math.round(p*240)}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
+  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='ring' ? `r${Math.round(p*240)}` : kind==='homeIdle' ? `hi` : kind==='nfc' ? `n${Math.round(p*200)}` : kind==='wear' ? `w${Math.round(p*300)}${Math.floor(t*12)}` : kind==='memories' ? `m${Math.round(p*200)}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
   const kk = k + hhmm(clock.shown);
   if (kk === uiKey) return;
   uiKey = kk;
@@ -1435,22 +1578,32 @@ function renderUI(kind, p, now){
   // entering a transition (from either side): capture the two app screens it moves between, without the status bar
   if (kind.startsWith('home') && lastKind !== kind){
     NO_STATUS = true;
-    if (kind === 'home'){ Object.assign(TRANS, {from:'recents', to:'wear', toDark:false}); snapshot(SNAP_A, () => drawAsk(1, 0)); snapshot(SNAP_B, () => drawPulse(0, t)); }
-    else { Object.assign(TRANS, {from:'wear', to:'internat', toDark:false}); snapshot(SNAP_A, () => drawPulse(2, t)); snapshot(SNAP_B, () => drawInternat(0, t)); }
+    if (kind === 'home'){ Object.assign(TRANS, {from:'recents', to:null, toDark:false}); snapshot(SNAP_A, () => drawAsk(1, 0)); }
+    else { Object.assign(TRANS, {from:'wear', to:'internat', toDark:false}); snapshot(SNAP_A, () => drawMemories(1, t)); snapshot(SNAP_B, () => drawInternat(0, t)); }
     NO_STATUS = false;
   }
   if (kind === 'ring' && lastKind !== 'ring') snapshot(SNAP_C, () => drawCall(0, 0, t));
+  if (kind === 'nfc' && lastKind !== 'nfc') snapshot(SNAP_D, () => drawWear(0, t));
   lastKind = kind;
   if (kind==='off'){ ui.fillStyle = '#000'; ui.fillRect(0, 0, UW, UH); }
   else if (kind==='idle'){ HOME.pressed = ''; drawHome(0); }
   else if (kind==='ring') drawIncoming(p);
+  else if (kind==='homeIdle'){ HOME.pressed = ''; drawHome(0); }
+  else if (kind==='nfc') drawNfc(p);
+  else if (kind==='wear') drawWear(p, t);
+  else if (kind==='memories'){
+    // pushed in from the right over the send screen, the iOS way
+    const k = easeIO(smooth(0, .14, p));
+    if (k < 1){ ui.save(); ui.translate(-UW*.3*k, 0); drawWear(1, t); ui.restore(); ui.fillStyle = `rgba(0,0,0,${.12*k})`; ui.fillRect(0, 0, UW, UH); }
+    ui.save(); ui.translate(UW*(1 - k), 0); drawMemories(p, t); ui.restore();
+  }
   else if (kind==='call') drawCall(p, secs, t);
   else if (kind==='transcript') drawTranscript(p);
   else if (kind==='ask') drawAsk(p, t);
   else if (kind.startsWith('home')) drawGoHome(p, t);
   else if (kind==='internat') drawInternat(p, t);
   else drawPulse(p, t);
-  if (!kind.startsWith('home') && kind !== 'off') homeIndicator(kind !== 'pulse' && kind !== 'internat');
+  if (!kind.startsWith('home') && kind !== 'off') homeIndicator(!['pulse', 'internat', 'wear', 'memories'].includes(kind));
   ui.restore();
   uiTex.needsUpdate = true;
 }
@@ -1461,8 +1614,9 @@ function drawNotif(){
   wcMark(nc, 86, 98, 47);
   nc.fillStyle = '#7d776c'; nc.font = `600 22px ${SF}`; nc.letterSpacing = '4px'; nc.textBaseline = 'middle';
   nc.fillText('WEAR CLOSE', 170, 70); nc.letterSpacing = '0px';
-  nc.textAlign = 'right'; nc.font = `400 22px ${SF}`; nc.fillText('now', 680, 70); nc.textAlign = 'left';
-  nc.fillStyle = '#1b1a18'; nc.font = `600 36px ${SF}`; nc.fillText('Petr is thinking about you.', 170, 126);
+  nc.textAlign = 'right'; nc.font = `400 22px ${SF}`; nc.fillText('now', 572, 70); nc.textAlign = 'left';
+  nc.fillStyle = '#1b1a18'; nc.font = `600 32px ${SF}`; nc.fillText('Petr is thinking about you.', 170, 126);
+  nc.save(); nc.beginPath(); nc.roundRect(596, 50, 96, 96, 18); nc.clip(); nc.drawImage(WC_PHOTO, 596, 50, 96, 96); nc.restore(); // it came with a photo
   notifTex.needsUpdate = true;
 }
 
@@ -1470,6 +1624,8 @@ function drawNotif(){
 const TAU = Math.PI*2;
 const TAP_ROT = [-1.02, .12, .22];
 const TAP_POS = STONE_NODE.clone().add(new THREE.Vector3(-.06, .5, .2)).toArray();
+// using Wear Close: the phone comes forward and up, beside the pair, big enough to read
+const WC_USE_POS = [-.78, .34, .55], WC_USE_ROT = [-.1, .26, .05], WC_USE_S = .78;
 // lying back-up, long edge to the camera, close in: the card next to the camera plateau, like Ruune shows it
 // close enough that the 1.3 mm difference reads: frame the stretch from the lenses to the card's top edge
 const PROFILE_S = 4.4, PROFILE_ROT = [Math.PI/2, 0, Math.PI/2], PROFILE_POS = [.91, .04 - PD/2*PROFILE_S, .3];
@@ -1484,14 +1640,14 @@ const PHONE_KEYS = [
   [4.6, PROFILE_POS, PROFILE_ROT, PROFILE_S],
   [4.68, PROFILE_POS, PROFILE_ROT, PROFILE_S],
   [4.79, [0,0,0], [-.05,-.3,.03], 1],
-  [5.3, [0,0,0], [-.05,-.27,.03], 1], // holds while it goes home and opens Wear Close
+  [5.3, [0,0,0], [-.05,-.27,.03], 1], // holds while it goes home
   [5.6,  [-.55,.6,.3], [-.18,.3,.5], .6],
   [6.02, [-.55,.6,.3], [-.18,.3,.5], .6],
   [6.24, TAP_POS, TAP_ROT, .6],
-  [6.42, TAP_POS, TAP_ROT, .6],
-  [6.62, [-.6,.56,.3], [-.18,.28,.45], .6],
-  [7.02, [-.6,.56,.3], [-.18,.28,.45], .6],
-  [7.34, [0,0,0], [-.05,-.28,.03], 1],
+  [6.38, TAP_POS, TAP_ROT, .6],
+  [6.52, WC_USE_POS, WC_USE_ROT, WC_USE_S], // forward, to use the app
+  [7.24, WC_USE_POS, WC_USE_ROT, WC_USE_S],
+  [7.42, [0,0,0], [-.05,-.28,.03], 1],
   [9.02, [0,0,0], [-.05,-.22,.03], 1],
   [9.55, [-1.3,-3.0,-.4], [.6,.9,.9], 1]
 ];
@@ -1521,7 +1677,11 @@ function pose(keys, st, obj){
   obj.quaternion.slerpQuaternions(q01, q12, f);
   obj.scale.setScalar(bz(a[3], v[3], b[3]));
 }
-const SNAP = 4.33, ARRIVE = 6.56;
+const SNAP = 4.33;
+// Wear Close: the tap is read (NFC_AT), the notification opens the app (OPENED), the pulse goes out with its photo and
+// note (SEND_AT, the send screen's p .64), lands on her side (ARRIVE, p .86), then Memories (SENT_DONE → 7.36)
+const NFC_AT = 6.26, OPENED = 6.46, SENT_DONE = 7.0;
+const SEND_AT = OPENED + (SENT_DONE - OPENED)*.64, ARRIVE = OPENED + (SENT_DONE - OPENED)*.86;
 const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
 // the card glides in from beyond the frame edge, hovers over the back showing its face, then the magnet takes it
 const CARD_FROM = new THREE.Vector3(-3.4, 1.4, -2.6), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2), CARD_IN = 4.03, CARD_HOVER = 4.2;
@@ -1683,12 +1843,15 @@ function updateStage(st, now){
   else if (st < 4.86) renderUI('transcript', smooth(4.72, 4.86, st), now);
   else if (st < 5.04) renderUI('ask', clamp01((st-4.86)/.17), now);
   else if (st < 5.3) renderUI('home', clamp01((st-5.04)/.26), now);
-  else if (st < 7.36) renderUI('pulse', st < 6.22 ? 0 : st < ARRIVE ? 1 : 2, now);
+  else if (st < NFC_AT) renderUI('homeIdle', 0, now);
+  else if (st < OPENED) renderUI('nfc', clamp01((st - NFC_AT)/(OPENED - NFC_AT)), now);
+  else if (st < SENT_DONE) renderUI('wear', clamp01((st - OPENED)/(SENT_DONE - OPENED)), now);
+  else if (st < 7.36) renderUI('memories', clamp01((st - SENT_DONE)/(7.36 - SENT_DONE)), now);
   else if (st < 7.64) renderUI('home2', clamp01((st-7.36)/.28), now);
   else renderUI('internat', clamp01((st-7.64)/1.3), now);
 
   // bracelets
-  const bIn = smooth(5.35, 5.95, st), bOut = smooth(7.02, 7.5, st), bVis = bIn*(1-bOut);
+  const bIn = smooth(5.35, 5.95, st), bOut = smooth(7.24, 7.6, st), bVis = bIn*(1-bOut);
   stone.g.visible = charcoal.g.visible = bVis > .002;
   if (stone.g.visible){
     stone.g.position.copy(STONE_AT).add(new THREE.Vector3(0, (1-bIn)*-2.4 - bOut*2.6 + (reduced?0:Math.sin(t*.9)*.02), 0));
@@ -1700,7 +1863,7 @@ function updateStage(st, now){
     if (st >= ARRIVE && sinceArr < .6 && !reduced){ const j = (1-sinceArr/.6)*.012; charcoal.g.position.x += (Math.random()-.5)*j; charcoal.g.position.y += (Math.random()-.5)*j; }
     const glow = st >= ARRIVE ? .35 + .65*Math.exp(-Math.max(0,sinceArr)*2.2) : 0;
     charcoal.bezM.emissive.setRGB(1.0,.42,.18).multiplyScalar(glow*1.6);
-    stone.bezM.emissive.setRGB(1.0,.55,.3).multiplyScalar(st > 6.2 && st < 6.5 ? smooth(6.2,6.26,st)*(1-smooth(6.42,6.5,st)) : 0);
+    stone.bezM.emissive.setRGB(1.0,.55,.3).multiplyScalar(st > 6.2 && st < 6.5 ? smooth(6.2,6.26,st)*(1-smooth(6.4,6.48,st)) : 0);
   }
   // NFC ripples at the moment of the tap
   ripples.forEach((m,i)=>{
@@ -1709,7 +1872,7 @@ function updateStage(st, now){
     m.scale.setScalar(.06 + k*.36); m.material.opacity = (1-k)*.85;
   });
   // the pulse: a comet along the arc
-  const head = clamp01((st-6.3)/(ARRIVE-6.3)), tail = clamp01((st-6.36)/(ARRIVE-6.3+.04));
+  const head = clamp01((st - SEND_AT)/(ARRIVE - SEND_AT)), tail = clamp01((st - SEND_AT - .04)/(ARRIVE - SEND_AT + .04));
   const travelling = head > 0 && tail < 1 && bVis > .5;
   pulseTube.visible = pulseHead.visible = travelling;
   if (travelling){
@@ -1883,12 +2046,16 @@ const PACE = [
   ] },
   { region: 5, beats: [[5.04, 5.3, 50], [5.3, 6.0, 50]] }, // home, open Wear Close; the bracelets arrive
   { region: 6, sec: 'c4', beats: [ // Wear Close
-    [6.0, 6.22, 45],    // "Bring your phone to your bracelet"
-    [6.22, 6.42, 50],   // the tap, sending
-    [6.42, 6.56, 35],   // it lands on Zuzka's wrist
-    [6.56, 7.0, 80]     // she felt it
+    [6.0, 6.24, 40],    // on the home screen, the phone goes to the bracelet
+    [6.24, 6.34, 45],   // the tag is read: "Open in Wear Close"
+    [6.34, 6.46, 40],   // tapped, the app opens on Zuzka
+    [6.46, 6.62, 60],   // a photo goes with it
+    [6.62, 6.76, 60],   // and a note
+    [6.76, 6.92, 55],   // send: the pulse travels to her
+    [6.92, 7.0, 45],    // she felt it
+    [7.0, 7.36, 90]     // Memories: today's moment lands on top of the rest
   ] },
-  { region: 7, beats: [[7.0, 7.36, 35], [7.36, 7.64, 45], [7.64, 7.75, 20]] }, // back to centre, home, open Internát
+  { region: 7, beats: [[7.36, 7.64, 70], [7.64, 7.75, 30]] }, // home, open Internát
   { region: 8, sec: 'c5', beats: [ // Internát (its demo runs 7.64 → 8.94; p = (t − 7.64)/1.3)
     [7.75, 7.822, 30],  // tap Extend
     [7.822, 7.887, 25], // the sheet comes up
