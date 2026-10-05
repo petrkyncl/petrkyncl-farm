@@ -2182,7 +2182,7 @@ function grade(im, sat){
   }
   g.putImageData(d, 0, 0); return c;
 }
-const GRADE = { school: .28, director: .28 };
+const GRADE = { school: .28, director: .28, group: .28 }; // the group photo closes the hackathon in the same grey as the school
 ['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
 let videoOn = false;
 { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
