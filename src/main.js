@@ -161,7 +161,8 @@ const REELS = [
     { src:'school',   full:true, fx:.5, fy:.5 },
     { src:'director', full:true, fx:.3, fy:.3 }
   ] },
-  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .14, .28, .42, .56, .7, .84].map(x => HACK_ST + x), items: [
+  // the pitch video holds more than twice as long as a photo: it's the one thing here worth stopping for
+  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .11, .39, .51, .63, .75, .87].map(x => HACK_ST + x), items: [
     { src:'crowd', full:true, fx:.5,  fy:.5 }, // the room first: how many people were there
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
@@ -2457,7 +2458,12 @@ function frame(now){
     wallPoint(r.x/faceC.width + .004, 1 - (r.y + r.h)/faceC.height - .012, corner).applyMatrix4(wall.matrixWorld).project(camera);
     const cx = Math.min(innerWidth - 240, Math.max(16, (corner.x*.5+.5)*innerWidth)), cy = land ? Math.min(innerHeight - 88, (-corner.y*.5+.5)*innerHeight) : 18;
     reelCap.style.transform = `translate(${cx}px,${cy}px)`;
-    const key = caps.caps[k];
+    let key = caps.caps[k];
+    // while the pitch plays, its caption runs the clock, so it reads as a video worth stopping for
+    if (caps === CAPTIONS[1] && REELS[1].items[k]?.src === 'video' && REEL.video){
+      const v = REEL.video, tm = s => `${Math.floor(s/60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+      key = `${key} · ▶ ${tm(v.currentTime || 0)} / ${tm(v.duration || 97)}`;
+    }
     if (reelCap.dataset.k !== key){ reelCap.dataset.k = key; reelCap.querySelector('span').textContent = key; reelCap.querySelector('b').textContent = String(k + 1).padStart(2, '0') + ' / ' + String(caps.caps.length).padStart(2, '0'); }
   }
   reelCap.style.opacity = caps ? 1 : 0;
