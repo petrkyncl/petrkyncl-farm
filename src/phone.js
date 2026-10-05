@@ -8,9 +8,20 @@
 import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { slab, flat, faceBack } from './shapes.js';
 
+// Cap a material's output before it reaches the bloom pass: a polished edge under a point-like light produces a
+// near-infinite specular peak, and bloom smears one such pixel into a white haze over the whole frame.
+export function clampHDR(m, max = 2.5){
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => { prev && prev(sh, r); sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+    gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(${max.toFixed(2)}));`); };
+  m.customProgramCacheKey = () => 'clamp' + max;
+  m.needsUpdate = true;
+  return m;
+}
 export const PW = .780, PH = 1.634, PD = .0875;
 export const PLATEAU = { w: .697, h: .432, rt: .09, rb: .055, rise: .0248, lens: .0169 };
 export const CARD = { w: .54, h: .856, d: .029, r: .07 };
@@ -124,26 +135,74 @@ export function createPhone(envTex){
   return { phone, display, yP, backZ, platZ, lensTop: platZ - PLATEAU.lens, lensEdge: [.235 + LR, .448], magsafe: [0, -.234] };
 }
 
+// Recents card: brushed stainless steel. Fine straight grain along the long axis (thousands of hairline scratches of
+// varying depth), so the highlight stretches across the grain the way real brushed steel does; the perimeter is a
+// polished chamfer. The wordmark is a polished inlay (same finish as the Apple logo on the phone), low on the face.
+// One button on the long edge, a pinhole status light.
+function brushedMaps(){
+  const W = 2048, H = 64; // the grain runs along v, so a short, wide strip repeated along v is enough
+  let sd = 13; const rnd = () => (sd = (sd*16807) % 2147483647) / 2147483647;
+  // height of the brushed surface per column: layered hairlines of random width and depth
+  const hgt = new Float32Array(W);
+  for (let k=0; k<9000; k++){ const x = rnd()*W, w = .35 + rnd()*rnd()*1.6, d = (rnd() - .5)*(.25 + rnd()*.35); for (let i=Math.floor(x - w*2); i<=x + w*2; i++){ const j = (i + W) % W; hgt[j] += d*Math.exp(-(((i - x)/w)**2)); } }
+  for (let k=0; k<10; k++){ const x = rnd()*W, w = 30 + rnd()*120, d = (rnd() - .5)*.35; for (let i=Math.floor(x - w*2); i<=x + w*2; i++){ const j = (i + W) % W; hgt[j] += d*Math.exp(-(((i - x)/w)**2)); } } // slow tonal bands
+  const nc = document.createElement('canvas'); nc.width = W; nc.height = H; const ng = nc.getContext('2d'), nd = ng.createImageData(W, H);
+  const rc = document.createElement('canvas'); rc.width = W; rc.height = H; const rg = rc.getContext('2d'), rd = rg.createImageData(W, H);
+  for (let x=0; x<W; x++){
+    const slope = (hgt[(x + 1) % W] - hgt[(x - 1 + W) % W])*.9, h = hgt[x];
+    for (let y=0; y<H; y++){
+      const i = (y*W + x)*4, wob = (rnd() - .5)*.05;
+      nd.data[i] = 128 + Math.max(-1, Math.min(1, slope + wob))*110; nd.data[i+1] = 128; nd.data[i+2] = 240; nd.data[i+3] = 255;
+      const rv = 128 + 26*Math.max(-1, Math.min(1, -h*.7)) + 8*(rnd() - .5); // roughness ~.45–.6: satin, not mirror rd.data[i] = rd.data[i+1] = rd.data[i+2] = rv; rd.data[i+3] = 255;
+    }
+  }
+  ng.putImageData(nd, 0, 0); rg.putImageData(rd, 0, 0);
+  const n = new THREE.CanvasTexture(nc), r = new THREE.CanvasTexture(rc);
+  // the slab's UVs are local x/y in scene units (±0.27 × ±0.43): one strip spans the card's width, grain along y
+  [n, r].forEach(t => { t.anisotropy = 16; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1/CARD.w, 4); t.offset.set(.5, 0); });
+  return { normalMap: n, roughnessMap: r };
+}
 export function createCard(envTex){
   const card = new THREE.Group();
-  const face = new THREE.MeshPhysicalMaterial({color:0x111214, roughness:.78, metalness:.05, sheen:.4, sheenRoughness:.6, sheenColor:0x3a3d44, envMap:envTex, envMapIntensity:.4});
-  const edge = new THREE.MeshPhysicalMaterial({color:0x17181b, roughness:.45, metalness:.2, envMap:envTex, envMapIntensity:.6});
-  card.add(new THREE.Mesh(slab(CARD.w, CARD.h, CARD.d, CARD.r, .006), [face, edge]));
+  const br = brushedMaps();
+  const face = clampHDR(new THREE.MeshPhysicalMaterial({ color:0xbfc2c6, metalness:1, roughness:1, roughnessMap:br.roughnessMap, normalMap:br.normalMap, normalScale:new THREE.Vector2(.32, .32),
+    envMap:envTex, envMapIntensity:1 }), .85); // capped just under the bloom threshold: the face reads as metal, never as a lamp // (no GGX anisotropy: under one key light it blooms into a streak)
+  const chamfer = clampHDR(new THREE.MeshPhysicalMaterial({ color:0xdcdee1, metalness:1, roughness:.12, envMap:envTex, envMapIntensity:1.2 }), 1.6);
+  card.add(new THREE.Mesh(smoothSlab(CARD.w, CARD.h, CARD.d, CARD.r, .0045), [face, chamfer]));
   const outZ = -CARD.d/2;
-  // debossed mark in the middle, one round metal button in the corner, a pinhole status light next to it
-  const mark = tex(512, 160, (g, w, h) => { g.clearRect(0,0,w,h); g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '600 64px -apple-system, "Helvetica Neue", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '4px'; g.fillText('recents', w/2, h/2); });
-  const wm = faceBack(new THREE.Mesh(new THREE.PlaneGeometry(.2, .0625), new THREE.MeshPhysicalMaterial({color:0x1d1f23, roughness:.32, metalness:.1, alphaMap:mark, transparent:true, depthWrite:false, envMap:envTex, envMapIntensity:.8})));
-  wm.position.set(0, 0, outZ - .0004); card.add(wm);
-  const bx = -CARD.w/2 + .075, by = CARD.h/2 - .075; // top-right corner seen from behind
-  const btnRing = faceBack(new THREE.Mesh(new THREE.RingGeometry(.03, .04, 64), new THREE.MeshPhysicalMaterial({color:0x8a8e95, metalness:1, roughness:.32, envMap:envTex, envMapIntensity:.45})));
-  btnRing.position.set(bx, by, outZ - .0006); card.add(btnRing);
-  const btnFace = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.03, 64), new THREE.MeshPhysicalMaterial({color:0x2a2c31, metalness:.8, roughness:.3, envMap:envTex, envMapIntensity:.7})));
-  btnFace.position.set(bx, by, outZ - .0005); card.add(btnFace);
+  // polished inlay wordmark, uppercase in a wide face, low on the card (seen from behind, so it reads normally)
+  const mark = tex(1024, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = '400 64px Michroma, "Martian Mono", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '26px'; g.fillText('RECENTS', w/2 + 13, h/2 + 2); }, false);
+  const inlay = clampHDR(new THREE.MeshPhysicalMaterial({ color:0xe2e3e5, metalness:1, roughness:.1, envMap:envTex, envMapIntensity:1.6, alphaMap:mark, transparent:true, alphaTest:.4, depthWrite:false }), 1.6);
+  const wm = faceBack(new THREE.Mesh(new THREE.PlaneGeometry(.34, .0425), inlay)); wm.position.set(0, -CARD.h/2 + .115, outZ - .0004); card.add(wm);
+  // side button on the long edge: a polished pill standing 0.8 mm proud of the edge
+  const btn = new THREE.Mesh(smoothSlab(.11, .016, .008, .008, .002), chamfer);
+  btn.rotation.y = Math.PI/2; btn.position.set(CARD.w/2 + .002, .16, 0); card.add(btn);
+  // pinhole status light, top corner (left as seen from behind)
   const ledM = new THREE.MeshBasicMaterial({color:0x000000});
-  const led = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.0065, 20), ledM)); led.position.set(bx + .085, by, outZ - .0005); card.add(led);
+  const led = faceBack(new THREE.Mesh(new THREE.CircleGeometry(.0055, 20), ledM)); led.position.set(CARD.w/2 - .06, CARD.h/2 - .06, outZ - .0005); card.add(led);
+  const ledRim = faceBack(new THREE.Mesh(new THREE.RingGeometry(.0055, .0075, 24), chamfer)); ledRim.position.copy(led.position); ledRim.position.z += .0001; card.add(ledRim);
   return { card, ledM };
 }
 
+// A rounded slab with a continuous, smoothly shaded edge: many bevel and corner segments, vertices welded and
+// normals recomputed so the rounding reads as one surface (ExtrudeGeometry alone shades each facet flat).
+// UVs are planar local x/y, which is what the face maps expect.
+function smoothSlab(w, h, d, r, b){
+  const shape = new THREE.Shape(), x = w/2 - b, y = h/2 - b, rr = Math.max(.001, r - b);
+  shape.moveTo(-x+rr, -y); shape.lineTo(x-rr, -y); shape.absarc(x-rr, -y+rr, rr, -Math.PI/2, 0, false);
+  shape.lineTo(x, y-rr); shape.absarc(x-rr, y-rr, rr, 0, Math.PI/2, false);
+  shape.lineTo(-x+rr, y); shape.absarc(-x+rr, y-rr, rr, Math.PI/2, Math.PI, false);
+  shape.lineTo(-x, -y+rr); shape.absarc(-x+rr, -y+rr, rr, Math.PI, Math.PI*1.5, false);
+  let g = new THREE.ExtrudeGeometry(shape, { depth: Math.max(.0005, d - 2*b), bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 16, curveSegments: 96 });
+  g.translate(0, 0, -(d - 2*b)/2);
+  g.deleteAttribute('normal'); g.deleteAttribute('uv');
+  g = mergeVertices(g, 1e-6);
+  g.computeVertexNormals();
+  const p = g.attributes.position, uv = new Float32Array(p.count*2);
+  for (let i=0; i<p.count; i++){ uv[i*2] = p.getX(i); uv[i*2+1] = p.getY(i); }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}
 // thin rounded-square outline, used for the "recording" ripples around the card
 export function outlineGeometry(w, h, r, t){
   const s = new THREE.Shape(), x = w/2, y = h/2;

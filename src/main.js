@@ -7,7 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rrShape, slab, flat, faceBack } from './shapes.js';
 import { createDesk } from './desk.js';
 import { reel } from './reels.js';
-import { createPhone, createCard, outlineGeometry, loadIphone, paint, DEEP_BLUE_NIGHT, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
+import { createPhone, createCard, outlineGeometry, loadIphone, paint, clampHDR, DEEP_BLUE_NIGHT, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import './style.css';
@@ -40,6 +40,19 @@ scene.fog = new THREE.Fog(room.clone(), 24, 70);
 const camera = new THREE.PerspectiveCamera(40, 1, .1, 200);
 scene.add(camera);
 const envTex = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
+// a quiet product-photo environment for the metal card: near-black dome, two soft boxes, no hot ceiling panels
+// (RoomEnvironment's panels reflect in brushed steel as blooming hotspots)
+const studioEnv = (() => {
+  const s = new THREE.Scene();
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, vertexShader:'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:'varying vec3 vP; void main(){ float h = normalize(vP).y; gl_FragColor = vec4(mix(vec3(.07), vec3(.17,.175,.18), smoothstep(-.4, .8, h)), 1.0); }' }));
+  s.add(dome);
+  const box = (w, h, x, y, z, v) => { const b = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(v, v, v*1.02), side: THREE.DoubleSide })); b.position.set(x, y, z); b.lookAt(0, 0, 0); s.add(b); };
+  box(7, 4, -5, 5, 4, 1.6);   // large soft key, top left front
+  box(1.2, 8, 7, 1, -2, 1.1); // strip light, right
+  box(6, 2, 0, -6, 3, .35);   // faint floor bounce
+  return new THREE.PMREMGenerator(renderer).fromScene(s, .02).texture;
+})();
 
 const amb = new THREE.AmbientLight(0x3a4050, 1.7); scene.add(amb);
 const key = new THREE.DirectionalLight(0x9fb0ff, 1.7); key.position.set(-8,12,18); scene.add(key);
@@ -597,10 +610,11 @@ let ui = UI.getContext('2d');
 const UI_CTX = ui;
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
 ph.display.material.map = uiTex; ph.display.material.needsUpdate = true;
-const rc = createCard(envTex), card = rc.card; phone.add(card);
+const rc = createCard(studioEnv), card = rc.card; phone.add(card);
 // swap the hand-built phone for the real model as soon as it loads; the procedural one stays as a fallback
 loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
   paint(mats, DEEP_BLUE_NIGHT);
+  Object.values(mats).forEach(mt => { if (mt.name !== 'OLED') clampHDR(mt, 2.2); }); // no fireflies off the rails and lenses
   const keep = new Set([card]);
   phone.children.forEach(c => { if (!keep.has(c) && !soundRings.includes(c)) c.visible = false; });
   const oled = mats['OLED'];
@@ -819,123 +833,207 @@ function drawTranscript(p){
     y += 42 + lines.length*40 + 30;
   });
 }
-const ANSWER_LINES = ['The dentist said to floss every night,', 'especially on the left side.', '', 'Your next cleaning is on', 'March 3 at 9:30.'];
+// Ask Recents: one question, answered from everything it has seen: the call, the clinic's SMS, the confirmation email
+const ANSWER_TEXT = 'Floss every night, especially on the left side. Your next cleaning is on March 3 at 9:30.';
+const SOURCES = [
+  ['call', 'Call · Dentist', '“…especially on the left side.”  2:31'],
+  ['sms',  'Notification · Messages', 'Clinic Novák: Reminder, cleaning Mar 3 9:30'],
+  ['mail', 'Gmail · Appointment confirmed', 'recepce@zubninovak.cz · Feb 12']
+];
+function srcIcon(kind, x, y){
+  ui.fillStyle = 'rgba(255,181,71,.16)'; ui.beginPath(); ui.arc(x, y, 28, 0, Math.PI*2); ui.fill();
+  ui.strokeStyle = AMB; ui.fillStyle = AMB; ui.lineWidth = 3; ui.lineJoin = 'round'; ui.lineCap = 'round';
+  if (kind === 'call'){ ui.save(); ui.translate(x - 13, y - 13); ui.scale(26/24, 26/24); ui.fill(new Path2D('M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z')); ui.restore(); }
+  else if (kind === 'sms'){ ui.beginPath(); ui.ellipse(x, y - 2, 14, 11, 0, 0, Math.PI*2); ui.fill(); ui.beginPath(); ui.moveTo(x - 8, y + 5); ui.lineTo(x - 12, y + 13); ui.lineTo(x - 2, y + 8); ui.fill(); }
+  else { rr(x - 14, y - 10, 28, 20, 3); ui.stroke(); ui.beginPath(); ui.moveTo(x - 13, y - 8); ui.lineTo(x, y + 2); ui.lineTo(x + 13, y - 8); ui.stroke(); }
+}
 function drawAsk(p, t){
   recentsNav('Ask Recents');
-  const typedK = clamp01(p/.4), sendK = smooth(.4, .5, p), ansK = clamp01((p - .5)/.38), srcK = smooth(.86, .96, p);
+  const M = 40, maxW = UW - 2*M;
+  const typedK = clamp01(p/.34), sendK = smooth(.34, .44, p), ansK = clamp01((p - .44)/.3);
   ui.font = `400 30px ${SF}`;
   // the question: typed in the field, then lifted into a bubble at the top right
   const n = Math.floor(typedK*QUERY.length), typed = QUERY.slice(0, n), qw = ui.measureText(QUERY).width + 52;
   if (sendK > 0){
-    const by = lerp(UH - 150, 196, outBack(sendK)), bx = UW - 36 - qw;
+    const by = lerp(UH - 150, 196, outBack(sendK)), bx = UW - M - qw;
     ui.globalAlpha = Math.min(1, sendK*2);
     ui.fillStyle = AMB; rr(bx, by, qw, 66, 33); ui.fill();
     ui.fillStyle = '#1a1205'; ui.fillText(QUERY, bx + 26, by + 34);
     ui.globalAlpha = 1;
   }
-  // the answer
+  // the answer, typed out, wrapped inside both margins
+  let y = 318;
   if (ansK > 0){
-    ui.fillStyle = AMB; ui.font = `600 21px ${SF}`; ui.fillText('✦  RECENTS', 40, 318);
-    const chars = Math.floor(ansK*ANSWER_LINES.join(' ').length); let used = 0;
-    ui.fillStyle = '#fff'; ui.font = `500 34px ${SF}`;
-    ANSWER_LINES.forEach((l, i) => { const s = l.slice(0, Math.max(0, chars - used)); used += l.length + 1; ui.fillText(s, 40, 372 + i*48); });
+    ui.fillStyle = AMB; ui.font = `600 21px ${SF}`; ui.fillText('✦  RECENTS', M, y);
+    ui.font = `500 33px ${SF}`; ui.fillStyle = '#fff';
+    const lines = wrap(ANSWER_TEXT, maxW); let left = Math.floor(ansK*ANSWER_TEXT.length);
+    lines.forEach((l, i) => { const s = l.slice(0, Math.max(0, left)); left -= l.length + 1; ui.fillText(s, M, y + 52 + i*46); });
+    y += 52 + lines.length*46 + 30;
   }
-  if (srcK > 0){
-    ui.globalAlpha = srcK;
-    const y = 640;
-    ui.fillStyle = '#1c1c1e'; rr(40, y, UW - 80, 128, 26); ui.fill();
-    ui.fillStyle = 'rgba(255,181,71,.16)'; ui.beginPath(); ui.arc(98, y + 64, 34, 0, Math.PI*2); ui.fill();
-    ui.fillStyle = AMB; ui.beginPath(); ui.moveTo(90, y + 48); ui.lineTo(114, y + 64); ui.lineTo(90, y + 80); ui.closePath(); ui.fill();
-    ui.fillStyle = '#fff'; ui.font = `600 26px ${SF}`; ui.fillText('Dentist · Today 14:02', 152, y + 50);
-    ui.fillStyle = 'rgba(235,235,245,.6)'; ui.font = `400 22px ${SF}`; ui.fillText('“…especially on the left side.”  2:31', 152, y + 86);
-    ui.fillStyle = '#1c1c1e'; rr(40, y + 150, 300, 60, 30); ui.fill();
-    ui.strokeStyle = AMB; ui.lineWidth = 2.6; rr(64, y + 166, 26, 26, 5); ui.stroke(); ui.beginPath(); ui.moveTo(64, y + 175); ui.lineTo(90, y + 175); ui.stroke();
-    ui.fillStyle = AMB; ui.font = `500 23px ${SF}`; ui.fillText('Add Mar 3 to Calendar', 102, y + 181);
+  // where it came from: a call, a notification, an email
+  SOURCES.forEach(([kind, title, sub], i) => {
+    const k = smooth(.74 + i*.06, .8 + i*.06, p); if (k <= 0) return;
+    const ry = y + 34 + i*104 + (1 - k)*20;
+    ui.globalAlpha = k;
+    if (i === 0){ ui.fillStyle = 'rgba(235,235,245,.45)'; ui.font = `600 19px ${SF}`; ui.letterSpacing = '2px'; ui.fillText('FROM', M, y + 4); ui.letterSpacing = '0px'; }
+    ui.fillStyle = '#1c1c1e'; rr(M, ry, maxW, 90, 22); ui.fill();
+    srcIcon(kind, M + 46, ry + 45);
+    ui.fillStyle = '#fff'; ui.font = `600 24px ${SF}`; ui.fillText(title, M + 92, ry + 32);
+    ui.fillStyle = 'rgba(235,235,245,.6)'; ui.font = `400 21px ${SF}`;
+    let s = sub; while (ui.measureText(s).width > maxW - 112 && s.length > 4) s = s.slice(0, -2); if (s !== sub) s = s.trimEnd() + '…';
+    ui.fillText(s, M + 92, ry + 62);
     ui.globalAlpha = 1;
-  }
+  });
   // input field
   ui.fillStyle = '#1c1c1e'; rr(36, UH - 150, UW - 72, 70, 35); ui.fill();
   ui.font = `400 30px ${SF}`;
   const field = sendK > .05 ? '' : typed;
-  ui.fillStyle = field ? '#fff' : 'rgba(235,235,245,.35)'; ui.fillText(field || 'Ask about your calls…', 68, UH - 114);
+  ui.fillStyle = field ? '#fff' : 'rgba(235,235,245,.35)'; ui.fillText(field || 'Ask your calls, messages, mail…', 68, UH - 114);
   if (sendK < .05 && n < QUERY.length && Math.floor(t*2)%2 === 0){ const w = ui.measureText(typed).width; ui.fillStyle = AMB; ui.fillRect(70 + w, UH - 132, 3, 36); }
   ui.fillStyle = field ? AMB : '#2c2c2e'; ui.beginPath(); ui.arc(UW - 74, UH - 115, 24, 0, Math.PI*2); ui.fill();
   ui.strokeStyle = field ? '#1a1205' : 'rgba(235,235,245,.6)'; ui.lineWidth = 3.4; ui.beginPath(); ui.moveTo(UW - 74, UH - 104); ui.lineTo(UW - 74, UH - 126); ui.moveTo(UW - 84, UH - 116); ui.lineTo(UW - 74, UH - 126); ui.lineTo(UW - 64, UH - 116); ui.stroke();
 }
-// ---------- Internát app (light, emerald like internat.cz) ----------
-const EM = '#059669', EM_L = '#d1fae5';
-const ARRIVALS = [['Tomáš K.','22:09'],['Adéla M.','22:07'],['Ondřej P.','22:04'],['Klára V.','21:58'],['Matěj H.','21:55']];
-function drawInternat(p, t){
+// ---------- Internát, the student app (rebuilt): going out without the paper book ----------
+// Story: Petr is in (the door chip saw him at 16:42). Curfew tonight is 18:00. He asks to stay out until 22:00,
+// picks Mom, sends it. Mom approves on her phone, the notification lands, the curfew card turns green.
+const OUT = 'Outfit, -apple-system, "Helvetica Neue", sans-serif';
+const EM = '#059669', EM4 = '#34d399', INK = '#0b0f0d', G5 = '#6b7280', G4 = '#9ca3af', LINE = '#eceeec';
+function inTag(text, x, y, col = G4){ ui.fillStyle = col; ui.font = `600 16px ${OUT}`; ui.letterSpacing = '2.6px'; ui.fillText(text, x, y); ui.letterSpacing = '0px'; }
+function inCard(x, y, w, h, r = 36, fill = '#fff'){ ui.fillStyle = fill; rr(x, y, w, h, r); ui.fill(); if (fill === '#fff'){ ui.strokeStyle = LINE; ui.lineWidth = 1.6; rr(x, y, w, h, r); ui.stroke(); } }
+function houseIcon(cx, cy, s, col){ ui.strokeStyle = col; ui.lineWidth = s*.12; ui.lineJoin = 'round'; ui.lineCap = 'round'; ui.beginPath(); ui.moveTo(cx - s*.42, cy - s*.02); ui.lineTo(cx, cy - s*.4); ui.lineTo(cx + s*.42, cy - s*.02); ui.moveTo(cx - s*.3, cy - s*.1); ui.lineTo(cx - s*.3, cy + s*.36); ui.lineTo(cx + s*.3, cy + s*.36); ui.lineTo(cx + s*.3, cy - s*.1); ui.stroke(); }
+function inHome(s){
+  const M = 32, W = UW - 2*M;
   ui.fillStyle = '#f5f6f5'; ui.fillRect(0, 0, UW, UH);
   statusBar(false, 0);
   ui.textBaseline = 'middle'; ui.textAlign = 'left';
-  ui.fillStyle = '#6b7280'; ui.font = `600 20px ${SF}`; ui.letterSpacing = '2px'; ui.fillText('DORMITORY · CURFEW 22:00', 40, 132); ui.letterSpacing = '0px';
-  ui.fillStyle = '#0b0f0d'; ui.font = `700 54px ${SF}`; ui.fillText('Tonight', 40, 188);
-  // occupancy: counts up as badges tap in at the door
-  const inK = smooth(.02, .35, p), count = Math.round(lerp(113, 118, inK));
-  ui.fillStyle = '#fff'; rr(36, 236, UW - 72, 170, 28); ui.fill();
-  ui.strokeStyle = EM_L; ui.lineWidth = 16; ui.beginPath(); ui.arc(122, 321, 54, 0, Math.PI*2); ui.stroke();
-  ui.strokeStyle = EM; ui.lineCap = 'round'; ui.beginPath(); ui.arc(122, 321, 54, -Math.PI/2, -Math.PI/2 + Math.PI*2*count/124); ui.stroke(); ui.lineCap = 'butt';
-  ui.fillStyle = '#0b0f0d'; ui.font = `700 52px ${SF}`; ui.fillText(`${count}`, 210, 304); const cw = ui.measureText(`${count}`).width;
-  ui.fillStyle = '#9ca3af'; ui.font = `500 30px ${SF}`; ui.fillText(' / 124 in', 210 + cw, 308);
-  ui.fillStyle = EM; ui.font = `500 22px ${SF}`; ui.fillText('● Main door online', 212, 352);
-  // arrivals feed: newest slides in on top
-  ui.fillStyle = '#6b7280'; ui.font = `600 20px ${SF}`; ui.letterSpacing = '2px'; ui.fillText('ARRIVALS', 40, 452); ui.letterSpacing = '0px';
-  const shown = Math.min(ARRIVALS.length, 3 + Math.floor(inK*2.99));
-  const late = smooth(.7, .78, p);
-  for (let i=0; i<shown; i++){
-    const idx = ARRIVALS.length - shown + i, [name, time] = ARRIVALS[idx];
-    const isNew = i === 0 && inK < 1, slide = isNew ? clamp01((inK*2.99 % 1)*2) : 1;
-    const y = 488 + i*86 - (1 - slide)*40;
-    ui.globalAlpha = slide;
-    ui.fillStyle = '#fff'; rr(36, y, UW - 72, 74, 20); ui.fill();
-    ui.fillStyle = EM_L; ui.beginPath(); ui.arc(84, y + 37, 22, 0, Math.PI*2); ui.fill();
-    ui.strokeStyle = EM; ui.lineWidth = 2.6; rr(74, y + 26, 20, 22, 4); ui.stroke(); ui.beginPath(); ui.arc(84, y + 37, 4, 0, Math.PI*2); ui.stroke();
-    ui.fillStyle = '#0b0f0d'; ui.font = `600 26px ${SF}`; ui.fillText(name, 124, y + 28);
-    ui.fillStyle = '#6b7280'; ui.font = `400 21px ${SF}`; ui.fillText(`Badge · Main door · ${time}`, 124, y + 54);
-    ui.fillStyle = EM; ui.font = `600 26px ${SF}`; ui.textAlign = 'right'; ui.fillText('✓', UW - 64, y + 38); ui.textAlign = 'left';
+  // brand row + avatar
+  ui.fillStyle = '#d1fae5'; rr(M, 112, 46, 46, 14); ui.fill(); houseIcon(M + 23, 136, 26, EM);
+  ui.fillStyle = INK; ui.font = `600 24px ${OUT}`; ui.fillText('Internát', M + 60, 136);
+  ui.fillStyle = INK; ui.beginPath(); ui.arc(UW - M - 24, 135, 24, 0, Math.PI*2); ui.fill(); ui.fillStyle = '#fff'; ui.font = `600 18px ${OUT}`; ui.textAlign = 'center'; ui.fillText('PK', UW - M - 24, 136); ui.textAlign = 'left';
+  ui.fillStyle = INK; ui.font = `700 42px ${OUT}`; ui.fillText('Good evening, Petr', M, 210);
+  // status
+  let y = 252;
+  ui.save(); rr(M, y, W, 176, 36); ui.clip();
+  const g = ui.createLinearGradient(M, y, M + W, y + 176); g.addColorStop(0, '#0b0f0d'); g.addColorStop(1, '#0d2a20'); ui.fillStyle = g; ui.fillRect(M, y, W, 176);
+  const glow = ui.createRadialGradient(M + W - 60, y + 40, 0, M + W - 60, y + 40, 240); glow.addColorStop(0, 'rgba(52,211,153,.35)'); glow.addColorStop(1, 'rgba(52,211,153,0)'); ui.fillStyle = glow; ui.fillRect(M, y, W, 176);
+  ui.restore();
+  inTag('STATUS', M + 30, y + 40, 'rgba(255,255,255,.45)');
+  const pulse = .5 + .5*Math.sin(s.t*3);
+  ui.fillStyle = `rgba(52,211,153,${.25*pulse})`; ui.beginPath(); ui.arc(M + 44, y + 96, 18 + 6*pulse, 0, Math.PI*2); ui.fill();
+  ui.fillStyle = EM4; ui.beginPath(); ui.arc(M + 44, y + 96, 11, 0, Math.PI*2); ui.fill();
+  ui.fillStyle = '#fff'; ui.font = `700 46px ${OUT}`; ui.fillText('You’re in', M + 72, y + 96);
+  ui.fillStyle = 'rgba(255,255,255,.55)'; ui.font = `400 19px ${OUT}`; ui.fillText('Door chip · checked in at 16:42', M + 30, y + 146);
+  ui.fillStyle = 'rgba(255,255,255,.1)'; rr(M + W - 150, y + 24, 122, 36, 18); ui.fill(); ui.fillStyle = 'rgba(255,255,255,.75)'; ui.font = `500 17px ${OUT}`; ui.textAlign = 'center'; ui.fillText('Room 214', M + W - 89, y + 43); ui.textAlign = 'left';
+  // curfew
+  y += 196;
+  const ch = s.approved ? 236 : 196;
+  inCard(M, y, W, ch);
+  inTag('CURFEW TONIGHT', M + 30, y + 40);
+  ui.fillStyle = INK; ui.font = `800 68px ${OUT}`; ui.fillText(s.limit, M + 26, y + 104);
+  ui.fillStyle = G5; ui.font = `400 19px ${OUT}`; ui.fillText(s.approved ? '5 h 18 min left' : '1 h 18 min left', M + 30, y + 152);
+  // time left bar
+  ui.fillStyle = '#eef0ee'; rr(M + 30, y + 172, W - 60, 6, 3); ui.fill();
+  ui.fillStyle = s.approved ? EM : '#f59e0b'; rr(M + 30, y + 172, (W - 60)*(s.approved ? .24 : .62), 6, 3); ui.fill();
+  // Extend
+  const pk = 1 - .07*s.press;
+  ui.save(); ui.translate(M + W - 100, y + 82); ui.scale(pk, pk);
+  ui.fillStyle = s.press > 0 ? '#047857' : EM; rr(-74, -28, 148, 56, 28); ui.fill();
+  ui.fillStyle = '#fff'; ui.font = `600 21px ${OUT}`; ui.textAlign = 'center'; ui.fillText('Extend', 0, 1); ui.textAlign = 'left'; ui.restore();
+  if (s.approved){
+    ui.fillStyle = '#ecfdf5'; rr(M + 22, y + 192, W - 44, 30, 15); ui.fill();
+    ui.fillStyle = EM; ui.beginPath(); ui.arc(M + 42, y + 207, 8, 0, Math.PI*2); ui.fill();
+    ui.strokeStyle = '#fff'; ui.lineWidth = 2.4; ui.beginPath(); ui.moveTo(M + 38, y + 207); ui.lineTo(M + 41, y + 210); ui.lineTo(M + 46, y + 204); ui.stroke();
+    ui.fillStyle = '#047857'; ui.font = `500 17px ${OUT}`; ui.fillText('Approved by Mom · show up at the front desk when you’re back', M + 58, y + 208);
+  }
+  y += ch + 20;
+  // waiting for Mom
+  if (s.pending > 0){
+    ui.globalAlpha = s.pending;
+    inCard(M, y, W, 112, 32, '#fffbeb'); ui.strokeStyle = '#fde68a'; ui.lineWidth = 1.6; rr(M, y, W, 112, 32); ui.stroke();
+    ui.fillStyle = '#92400e'; ui.font = `600 23px ${OUT}`; ui.fillText('Waiting for Mom', M + 30, y + 42);
+    for (let d=0; d<3; d++){ ui.fillStyle = `rgba(217,119,6,${.3 + .7*Math.max(0, Math.sin(s.t*5 - d*.7))})`; ui.beginPath(); ui.arc(M + 232 + d*14, y + 43, 4.5, 0, Math.PI*2); ui.fill(); }
+    ui.fillStyle = '#b45309'; ui.font = `400 19px ${OUT}`; ui.fillText('Asked to stay out until 22:00', M + 30, y + 78);
+    ui.globalAlpha = 1;
+    y += 132*s.pending;
+  }
+  // quick actions
+  const tw = (W - 16)/2;
+  [['Weekend stay', 'Not going home Friday', '#dbeafe', '#2563eb'], ['Going home', 'Leave the dorm early', '#fee2e2', '#dc2626']].forEach(([t1, t2, bg, fg], i) => {
+    const x = M + i*(tw + 16); inCard(x, y, tw, 132, 30);
+    ui.fillStyle = bg; rr(x + 22, y + 22, 44, 44, 14); ui.fill(); ui.fillStyle = fg; ui.beginPath(); ui.arc(x + 44, y + 44, 7, 0, Math.PI*2); ui.fill();
+    ui.fillStyle = INK; ui.font = `600 21px ${OUT}`; ui.fillText(t1, x + 22, y + 92); ui.fillStyle = G5; ui.font = `400 16px ${OUT}`; ui.fillText(t2, x + 22, y + 116);
+  });
+  y += 156;
+  // today
+  inTag('TODAY', M + 4, y + 10); y += 36;
+  const rows = s.approved ? [['Curfew extended to 22:00', 'Approved by Mom', '17:44'], ['Checked in', 'Main door · chip', '16:42']] : [['Checked in', 'Main door · chip', '16:42'], ['Left for school', 'Main door · chip', '07:31']];
+  inCard(M, y, W, 172, 30);
+  rows.forEach(([t1, t2, tm], i) => {
+    const ry = y + 22 + i*76;
+    ui.fillStyle = i === 0 && s.approved ? '#d1fae5' : '#f3f4f6'; ui.beginPath(); ui.arc(M + 44, ry + 30, 20, 0, Math.PI*2); ui.fill();
+    ui.fillStyle = i === 0 && s.approved ? EM : G5; ui.beginPath(); ui.arc(M + 44, ry + 30, 6, 0, Math.PI*2); ui.fill();
+    ui.fillStyle = INK; ui.font = `500 21px ${OUT}`; ui.fillText(t1, M + 80, ry + 18); ui.fillStyle = G4; ui.font = `400 17px ${OUT}`; ui.fillText(t2, M + 80, ry + 44);
+    ui.fillStyle = G5; ui.font = `500 18px ${OUT}`; ui.textAlign = 'right'; ui.fillText(tm, M + W - 26, ry + 30); ui.textAlign = 'left';
+    if (i === 0){ ui.fillStyle = LINE; ui.fillRect(M + 80, ry + 70, W - 106, 1.4); }
+  });
+}
+function inWheel(cx, cy, hourF){
+  const A = ui.globalAlpha; // respect the sheet's cross-fade
+  ui.fillStyle = '#f2f4f2'; rr(cx - 190, cy - 36, 380, 72, 20); ui.fill();
+  ui.save(); ui.beginPath(); ui.rect(cx - 200, cy - 150, 400, 300); ui.clip();
+  for (let k = -3; k <= 3; k++){
+    const hv = Math.round(hourF) + k, off = (hv - hourF)*70, a = Math.max(0, 1 - Math.abs(off)/200);
+    if (a <= 0) continue;
+    const near = Math.abs(off) < 35, sc = 1 - Math.min(.35, Math.abs(off)/420);
+    ui.globalAlpha = a*A; ui.fillStyle = near ? INK : '#a3a8a5'; ui.font = `${near ? 700 : 400} ${Math.round(48*sc)}px ${OUT}`; ui.textAlign = 'center';
+    ui.fillText(String(((hv % 24) + 24) % 24).padStart(2, '0'), cx - 64, cy + off + 2);
+  }
+  ui.globalAlpha = A; ui.fillStyle = INK; ui.font = `700 48px ${OUT}`; ui.textAlign = 'center'; ui.fillText(':', cx, cy); ui.fillText('00', cx + 64, cy + 2);
+  ui.restore(); ui.textAlign = 'left';
+}
+function drawInternat(p, t){
+  const s = { t, press: smooth(.08, .1, p)*(1 - smooth(.12, .14, p)), approved: p > .74, pending: p > .54 && p <= .74 ? smooth(.54, .58, p) : 0 };
+  s.limit = s.approved ? '22:00' : '18:00';
+  inHome(s);
+  // the bottom sheet: pick a time, pick who approves, send; it turns into a confirmation, then slides away
+  const up = smooth(.13, .19, p), down = smooth(.5, .54, p), sheet = up*(1 - down);
+  if (sheet > 0){
+    ui.fillStyle = `rgba(11,15,13,${.38*sheet})`; ui.fillRect(0, 0, UW, UH);
+    const H = 780, y0 = UH - H*outBack(Math.min(1, sheet*1.02)) + 20;
+    ui.fillStyle = '#fff'; rr(0, y0, UW, H + 60, 48); ui.fill();
+    ui.fillStyle = '#d4d7d5'; rr(UW/2 - 30, y0 + 14, 60, 6, 3); ui.fill();
+    const sent = smooth(.44, .47, p);
+    ui.globalAlpha = 1 - sent;
+    ui.fillStyle = INK; ui.font = `700 34px ${OUT}`; ui.fillText('Stay out later', 40, y0 + 76);
+    ui.fillStyle = G5; ui.font = `400 20px ${OUT}`; ui.fillText('Mom or Dad approves it on their phone.', 40, y0 + 114);
+    inWheel(UW/2, y0 + 270, 18 + 4*easeIO(clamp01((p - .2)/.13)));
+    inTag('WHO APPROVES', 40, y0 + 436);
+    ui.fillStyle = '#f2f4f2'; rr(40, y0 + 460, UW - 80, 66, 20); ui.fill();
+    ui.fillStyle = '#fff'; rr(46, y0 + 466, (UW - 92)/2, 54, 16); ui.fill(); ui.strokeStyle = LINE; ui.lineWidth = 1.4; rr(46, y0 + 466, (UW - 92)/2, 54, 16); ui.stroke();
+    ui.font = `600 21px ${OUT}`; ui.textAlign = 'center'; ui.fillStyle = INK; ui.fillText('Mom', 46 + (UW - 92)/4, y0 + 494); ui.fillStyle = G5; ui.fillText('Dad', UW - 46 - (UW - 92)/4, y0 + 494); ui.textAlign = 'left';
+    ui.fillStyle = G4; ui.font = `400 17px ${OUT}`; ui.fillText('No arrivals between 1:00 and 5:00.', 40, y0 + 562);
+    const sp = smooth(.4, .42, p)*(1 - smooth(.43, .45, p));
+    ui.save(); ui.translate(UW/2, y0 + 640); ui.scale(1 - .04*sp, 1 - .04*sp);
+    ui.fillStyle = sp > 0 ? '#1f2937' : INK; rr(-(UW - 80)/2, -38, UW - 80, 76, 26); ui.fill(); ui.fillStyle = '#fff'; ui.font = `600 23px ${OUT}`; ui.textAlign = 'center'; ui.fillText('Send to Mom', 0, 1); ui.restore(); ui.textAlign = 'left';
+    ui.globalAlpha = sent;
+    if (sent > 0){
+      const cy = y0 + 250, k = outBack(sent);
+      ui.fillStyle = '#d1fae5'; ui.beginPath(); ui.arc(UW/2, cy, 60*k, 0, Math.PI*2); ui.fill();
+      ui.strokeStyle = EM; ui.lineWidth = 8; ui.lineCap = 'round'; ui.lineJoin = 'round'; ui.beginPath(); ui.moveTo(UW/2 - 24, cy); ui.lineTo(UW/2 - 6, cy + 18); ui.lineTo(UW/2 + 28, cy - 18); ui.stroke();
+      ui.fillStyle = INK; ui.font = `700 36px ${OUT}`; ui.textAlign = 'center'; ui.fillText('Sent to Mom', UW/2, cy + 128);
+      ui.fillStyle = G5; ui.font = `400 21px ${OUT}`; ui.fillText('You’ll get a notification when she answers.', UW/2, cy + 172); ui.textAlign = 'left';
+    }
     ui.globalAlpha = 1;
   }
-  // Jana isn't back: a late row
-  const jy = 488 + shown*86;
-  ui.globalAlpha = late;
-  ui.fillStyle = '#fff7ed'; rr(36, jy, UW - 72, 74, 20); ui.fill();
-  ui.fillStyle = '#fed7aa'; ui.beginPath(); ui.arc(84, jy + 37, 22, 0, Math.PI*2); ui.fill();
-  ui.fillStyle = '#ea580c'; ui.font = `700 26px ${SF}`; ui.textAlign = 'center'; ui.fillText('!', 84, jy + 38); ui.textAlign = 'left';
-  ui.fillStyle = '#0b0f0d'; ui.font = `600 26px ${SF}`; ui.fillText('Jana N.', 124, jy + 28);
-  ui.fillStyle = '#c2410c'; ui.font = `500 21px ${SF}`; ui.fillText('Not back · 22:15 · parents texted', 124, jy + 54);
-  ui.globalAlpha = 1;
-  // a weekend pass slides up, gets signed with a finger, turns green
-  const passIn = smooth(.36, .44, p) * (1 - smooth(.66, .72, p)), sign = clamp01((p - .46)/.12), signed = smooth(.58, .6, p);
-  if (passIn > 0){
-    const y = lerp(UH, UH - 520, outBack(passIn));
-    ui.fillStyle = 'rgba(0,0,0,.18)'; ui.fillRect(0, 0, UW, UH);
-    ui.fillStyle = '#fff'; rr(20, y, UW - 40, 500, 40); ui.fill();
-    ui.fillStyle = '#d1d5db'; rr(UW/2 - 30, y + 14, 60, 6, 3); ui.fill();
-    ui.fillStyle = '#6b7280'; ui.font = `600 20px ${SF}`; ui.letterSpacing = '2px'; ui.fillText('WEEKEND PASS', 56, y + 66); ui.letterSpacing = '0px';
-    ui.fillStyle = '#0b0f0d'; ui.font = `700 38px ${SF}`; ui.fillText('Adéla M.', 56, y + 116);
-    ui.fillStyle = '#374151'; ui.font = `400 25px ${SF}`; ui.fillText('Fri 15:00  →  Sun 18:00 · going home', 56, y + 160);
-    ui.strokeStyle = '#e5e7eb'; ui.lineWidth = 2; ui.setLineDash([8, 8]); ui.beginPath(); ui.moveTo(56, y + 320); ui.lineTo(UW - 56, y + 320); ui.stroke(); ui.setLineDash([]);
-    ui.fillStyle = '#9ca3af'; ui.font = `400 20px ${SF}`; ui.fillText('Sign here', 56, y + 346);
-    // signature, drawn as you watch
-    ui.strokeStyle = '#111827'; ui.lineWidth = 3.4; ui.lineCap = 'round'; ui.lineJoin = 'round'; ui.beginPath();
-    const N = 80, upto = Math.floor(sign*N);
-    for (let i=0; i<=upto; i++){ const u = i/N, x = 90 + u*360, yy = y + 286 - Math.sin(u*Math.PI*3.2)*26*Math.exp(-u*.6) - Math.sin(u*Math.PI*9)*8*(1 - u); i ? ui.lineTo(x, yy) : ui.moveTo(x, yy); }
-    ui.stroke();
-    ui.fillStyle = signed > .5 ? EM : '#111827'; rr(56, y + 390, UW - 112, 76, 38); ui.fill();
-    ui.fillStyle = '#fff'; ui.font = `600 28px ${SF}`; ui.textAlign = 'center'; ui.fillText(signed > .5 ? 'Signed  ✓' : 'Approve', UW/2, y + 429); ui.textAlign = 'left';
-  }
-  // the alert drops in from the top like a notification
-  const al = smooth(.74, .8, p);
-  if (al > 0){
-    const y = lerp(-170, 92, outBack(al)); // below the Dynamic Island, where iOS drops notifications
-    ui.fillStyle = 'rgba(255,255,255,.96)'; rr(20, y, UW - 40, 150, 38); ui.fill();
-    ui.strokeStyle = 'rgba(0,0,0,.06)'; ui.lineWidth = 2; rr(20, y, UW - 40, 150, 38); ui.stroke();
-    ui.fillStyle = EM; rr(44, y + 28, 60, 60, 14); ui.fill();
-    ui.fillStyle = '#fff'; ui.font = `700 34px ${SF}`; ui.textAlign = 'center'; ui.fillText('i', 74, y + 60); ui.textAlign = 'left';
-    ui.fillStyle = '#6b7280'; ui.font = `500 19px ${SF}`; ui.fillText('INTERNÁT · now', 124, y + 40);
-    ui.fillStyle = '#0b0f0d'; ui.font = `600 25px ${SF}`; ui.fillText('Jana N. isn’t back yet', 124, y + 74);
-    ui.fillStyle = '#374151'; ui.font = `400 22px ${SF}`; ui.fillText('Her parents got an SMS at 22:15.', 124, y + 108);
+  // Mom approves: the notification drops below the Dynamic Island
+  const nK = smooth(.68, .73, p)*(1 - smooth(.88, .93, p));
+  if (nK > 0){
+    const y = lerp(-170, 92, outBack(nK));
+    ui.fillStyle = 'rgba(255,255,255,.97)'; rr(20, y, UW - 40, 140, 38); ui.fill(); ui.strokeStyle = 'rgba(0,0,0,.06)'; ui.lineWidth = 2; rr(20, y, UW - 40, 140, 38); ui.stroke();
+    ui.fillStyle = '#d1fae5'; rr(44, y + 28, 60, 60, 16); ui.fill(); houseIcon(74, y + 58, 34, EM);
+    ui.fillStyle = G5; ui.font = `500 18px ${OUT}`; ui.fillText('INTERNÁT · now', 124, y + 40);
+    ui.fillStyle = INK; ui.font = `600 24px ${OUT}`; ui.fillText('Mom approved', 124, y + 74);
+    ui.fillStyle = '#374151'; ui.font = `400 21px ${OUT}`; ui.fillText('You can stay out until 22:00.', 124, y + 106);
   }
 }
 function drawPulse(stateP, t){
@@ -1064,7 +1162,7 @@ function homeIndicator(dark){ ui.fillStyle = dark ? '#ffffff' : '#000000'; rr(UW
 let uiKey = '', lastKind = '';
 function renderUI(kind, p, now){
   const t = now/1000, secs = 252 + Math.floor(t)%600;
-  const k = kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
+  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
   const kk = k + hhmm(clock.shown);
   if (kk === uiKey) return;
   uiKey = kk;
@@ -1077,13 +1175,15 @@ function renderUI(kind, p, now){
     NO_STATUS = false;
   }
   lastKind = kind;
-  if (kind==='call') drawCall(p, secs, t);
+  if (kind==='off'){ ui.fillStyle = '#000'; ui.fillRect(0, 0, UW, UH); }
+  else if (kind==='idle'){ HOME.pressed = ''; drawHome(0); }
+  else if (kind==='call') drawCall(p, secs, t);
   else if (kind==='transcript') drawTranscript(p);
   else if (kind==='ask') drawAsk(p, t);
   else if (kind.startsWith('home')) drawGoHome(p, t);
   else if (kind==='internat') drawInternat(p, t);
   else drawPulse(p, t);
-  if (!kind.startsWith('home')) homeIndicator(kind !== 'pulse' && kind !== 'internat');
+  if (!kind.startsWith('home') && kind !== 'off') homeIndicator(kind !== 'pulse' && kind !== 'internat');
   ui.restore();
   uiTex.needsUpdate = true;
 }
@@ -1168,36 +1268,52 @@ function dimension(el, pa, pb, label, sub){
   el.innerHTML = `<line x1="${x1+6}" y1="${y1}" x2="${bx+6}" y2="${y1}"/><line x1="${x2+6}" y1="${y2}" x2="${bx+6}" y2="${y2}"/><line class="bar" x1="${bx}" y1="${y1}" x2="${bx}" y2="${y2}"/><text x="${bx+14}" y="${(y1+y2)/2+4}">${label}</text><text class="sub" x="${bx+14}" y="${(y1+y2)/2+20}">${sub}</text>`;
 }
 
-// pick the wall phone nearest (on screen) to where the iPhone will land, take its place, slide out of the slot
+// The iPhone is part of the wall from the start: the one iPhone among the Androids, in a slot picked so that
+// (a) it's on screen and close to where the iPhone lands when it leaves, and (b) it sits in a dark part of the
+// name picture, so it doesn't punch a hole in the letters. At the MationX → Recents transition it slides out.
 const slotM = new THREE.Matrix4(), slotP = new THREE.Vector3(), slotQ = new THREE.Quaternion(), slotS = new THREE.Vector3(), stageInv = new THREE.Matrix4(), tmpV = new THREE.Vector3();
 const landP = new THREE.Vector3(), landQ = new THREE.Quaternion(), landS = new THREE.Vector3();
+const IN_WALL_FROM = -1.0, LEAVE = 3.02, LANDED = 3.95; // stage time (real story time − 2)
 let slotIdx = -1;
 function setHiddenSlot(i){ if (i === hiddenSlot) return; const old = hiddenSlot; hiddenSlot = i; if (old >= 0) place(old); if (i >= 0) place(i); bodies.instanceMatrix.needsUpdate = screens.instanceMatrix.needsUpdate = cables.instanceMatrix.needsUpdate = true; }
-function emergeFromWall(st){
-  if (st < 3.0 || st > 9.6){ slotIdx = -1; setHiddenSlot(-1); return; }
-  if (slotIdx < 0){
-    camera.updateMatrixWorld(); wall.updateMatrixWorld();
-    const target = stage.getWorldPosition(new THREE.Vector3()).project(camera);
-    let best = 1e9;
-    for (let i=0; i<COUNT; i++){
-      const b = base[i]; tmpV.set(b.x, b.y, b.z).applyMatrix4(wall.matrixWorld).project(camera);
-      if (tmpV.z > 1 || Math.abs(tmpV.x) > 1 || Math.abs(tmpV.y) > 1) continue;
-      const d = (tmpV.x - target.x)**2 + (tmpV.y - target.y)**2;
-      if (d < best){ best = d; slotIdx = i; }
+function pickSlot(){
+  // where the camera will be when the iPhone leaves (real story time LEAVE + 2)
+  const cam = camera.clone(), tt = camParam(Math.min(wallCam(LEAVE + 2), S - 1));
+  posCurve.getPoint(tt, cam.position); cam.lookAt(tgtCurve.getPoint(tt, new THREE.Vector3())); cam.updateMatrixWorld(true);
+  const target = stage.position.clone().applyMatrix4(cam.matrixWorld).project(cam);
+  wall.updateMatrixWorld(true);
+  const nameData = nameG.getImageData(0, 0, nameC.width, nameC.height).data;
+  let best = 1e9;
+  for (let i=0; i<COUNT; i++){
+    const b = base[i]; tmpV.set(b.x, b.y, b.z).applyMatrix4(wall.matrixWorld).project(cam);
+    if (tmpV.z > 1 || Math.abs(tmpV.x) > .85 || Math.abs(tmpV.y) > .8) continue;
+    // how much of this slot is lit in the name picture
+    let lit = 0;
+    for (let sy=0; sy<5; sy++) for (let sx=0; sx<3; sx++){
+      const u = (b.c + .2 + sx*.3)/C, v = (b.r + .1 + sy*.2)/R;
+      const px = Math.floor(u*nameC.width), py = Math.floor((1 - v)*nameC.height);
+      lit += nameData[(py*nameC.width + px)*4] > 60 ? 1 : 0;
     }
-    if (slotIdx < 0) return;
+    const d = (tmpV.x - target.x)**2 + (tmpV.y - target.y)**2 + (lit ? 4 : 0);
+    if (d < best){ best = d; slotIdx = i; }
   }
+}
+function emergeFromWall(st){
+  if (st < IN_WALL_FROM || st > 9.6){ setHiddenSlot(-1); return; }
+  if (slotIdx < 0) pickSlot();
+  if (slotIdx < 0) return;
   setHiddenSlot(slotIdx);
-  if (st > 3.95) return;
+  if (st > LANDED) return;
   // slot pose, in the stage's frame (the wall and the stage move with the camera differently)
+  camera.updateMatrixWorld(true); wall.updateMatrixWorld(true);
   const b = base[slotIdx];
   tmpE.set(0, b.ry, 0); tmpQ.setFromEuler(tmpE);
   slotM.compose(tmpV.set(b.x, b.y, b.z), tmpQ, tmpS.set(1, 1, 1)).premultiply(wall.matrixWorld);
-  stage.updateMatrixWorld(); stageInv.copy(stage.matrixWorld).invert();
+  stage.updateMatrixWorld(true); stageInv.copy(stage.matrixWorld).invert();
   slotM.premultiply(stageInv).decompose(slotP, slotQ, slotS);
   // the iPhone (163 mm) scaled up to fill the wall phone's 194 mm slot, sitting where that phone's body sat
   const fill = slotS.x*1.94/1.634;
-  const k = clamp01((st - 3.02)/(3.95 - 3.02));
+  const k = clamp01((st - LEAVE)/(LANDED - LEAVE));
   const out = smooth(0, .35, k)*1.6, fly = easeIO(smooth(.22, 1, k));
   const n = tmpV.set(0, 0, 1).applyQuaternion(slotQ);
   landP.copy(phone.position); landQ.copy(phone.quaternion); landS.copy(phone.scale); // the key pose
@@ -1209,7 +1325,8 @@ function emergeFromWall(st){
 function updateStage(st, now){
   const t = now/1000;
   const vis = smooth(3.02, 3.5, st) * (1 - smooth(9.05, 9.6, st));
-  stage.visible = vis > .002;
+  const inWall = st >= IN_WALL_FROM && st < LEAVE;
+  stage.visible = vis > .002 || inWall;
   uniforms.uDim.value = vis;
   if (!stage.visible) return;
 
@@ -1219,12 +1336,12 @@ function updateStage(st, now){
   fx.prevSt = st;
 
   // phone
-  phone.visible = st > 3.03 && st < 9.58;
+  phone.visible = st >= IN_WALL_FROM && st < 9.58;
   pose(PHONE_KEYS, st, phone);
   emergeFromWall(st);
   // idle float, except during the dead-on profile where it has to hold perfectly still
   const still = smooth(4.57, 4.6, st)*(1 - smooth(4.68, 4.71, st));
-  if (!reduced){ phone.position.y += Math.sin(t*1.1)*.018*(1-still); phone.rotation.z += Math.sin(t*.8)*.012*(1-still); }
+  if (!reduced && !inWall){ phone.position.y += Math.sin(t*1.1)*.018*(1-still); phone.rotation.z += Math.sin(t*.8)*.012*(1-still); }
   // on phones the stage is centred, so slide the lens-to-card stretch of the profile to the middle of the screen
   if (isStacked()) phone.position.x += .5*still;
 
@@ -1267,10 +1384,13 @@ function updateStage(st, now){
   }
 
   // screen content
-  if (st < 4.7) renderUI('call', st >= SNAP ? on : 0, now);
+  // in the wall: screen off behind the name, home screen among the working Androids, then the call
+  if (st < 1.0) renderUI('off', 0, now);
+  else if (st < LEAVE) renderUI('idle', 0, now);
+  else if (st < 4.7) renderUI('call', st >= SNAP ? on : 0, now);
   else if (st < 4.86) renderUI('transcript', smooth(4.72, 4.86, st), now);
-  else if (st < 5.02) renderUI('ask', clamp01((st-4.86)/.13), now);
-  else if (st < 5.3) renderUI('home', clamp01((st-5.02)/.26), now);
+  else if (st < 5.04) renderUI('ask', clamp01((st-4.86)/.17), now);
+  else if (st < 5.3) renderUI('home', clamp01((st-5.04)/.26), now);
   else if (st < 7.36) renderUI('pulse', st < 6.22 ? 0 : st < ARRIVE ? 1 : 2, now);
   else if (st < 7.64) renderUI('home2', clamp01((st-7.36)/.28), now);
   else renderUI('internat', clamp01((st-7.64)/1.3), now);
@@ -1329,7 +1449,7 @@ const flashEl = document.getElementById('flash');
 // and long edges (the desk, phone rims) step visibly
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .74);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .9);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -1341,12 +1461,81 @@ function size(){
   placeStage();
 }
 size();
-// size each line of the name lockup so both lines are exactly as wide as the target width
+// The name lockup, set by measurement rather than by the font's metrics:
+// - every letter is drawn to a canvas and its ink profile read row by row
+// - each pair is spaced so the average gap between the two ink profiles (capped, so open counters don't count as
+//   space) is the same everywhere: optical kerning, so E–T and T–R read as equal
+// - PETR is scaled so its R ends exactly on the stem of KYNČL's L (not on L's foot), and both lines start on the
+//   same ink edge
+const LOCK_CAP = .09, LOCK_MIN = .02; // em: gaps wider than CAP count as CAP; ink never closer than MIN
+const inkCache = new Map();
+function ink(ch, font){
+  const key = font + ch; if (inkCache.has(key)) return inkCache.get(key);
+  const S = 200, cv = document.createElement('canvas'); cv.width = S*1.4; cv.height = S*1.6;
+  const g = cv.getContext('2d', {willReadFrequently:true}); g.font = `${font.weight} ${S}px ${font.family}`; g.textBaseline = 'alphabetic'; g.fillStyle = '#fff';
+  const ox = S*.2, base = S*1.25; g.fillText(ch, ox, base);
+  const d = g.getImageData(0, 0, cv.width, cv.height).data, rows = [];
+  let top = 1e9;
+  for (let y=0; y<cv.height; y++){
+    let l = -1, r = -1;
+    for (let x=0; x<cv.width; x++) if (d[(y*cv.width + x)*4] > 110){ if (l < 0) l = x; r = x; }
+    if (l >= 0) top = Math.min(top, y);
+    rows.push(l < 0 ? null : [(l - ox)/S, (r + 1 - ox)/S]);
+  }
+  const res = { rows, adv: g.measureText(ch).width/S, base, S, top: (base - top)/S };
+  inkCache.set(key, res); return res;
+}
+// rows are indexed relative to the baseline; compare two glyphs over the cap-height band
+function gaps(a, b, sh){
+  const lo = Math.round(a.base - .02*a.S), hi = Math.round(a.base - .74*a.S);
+  let s = 0, n = 0, mn = 1e9;
+  for (let y=hi; y<=lo; y++){
+    const ra = a.rows[y], rb = b.rows[y];
+    const g = (ra && rb) ? (rb[0] + sh) - ra[1] : LOCK_CAP;
+    if (ra && rb) mn = Math.min(mn, g);
+    s += Math.max(0, Math.min(LOCK_CAP, g)); n++;
+  }
+  return { mean: s/n, min: mn };
+}
+// the target is the space between two straight stems at the font's own spacing (H H): every pair gets that much
+let LOCK_TARGET = null;
+function pairShift(a, b, font){
+  if (LOCK_TARGET === null){ const h = ink('H', font); LOCK_TARGET = gaps(h, h, h.adv).mean; }
+  let x0 = -.12, x1 = .12;
+  for (let i=0; i<40; i++){ const mid = (x0 + x1)/2; if (gaps(a, b, a.adv + mid).mean < LOCK_TARGET) x0 = mid; else x1 = mid; }
+  let sh = (x0 + x1)/2;
+  while (gaps(a, b, a.adv + sh).min < LOCK_MIN && sh < .2) sh += .002; // never let ink touch
+  return sh;
+}
+function setLine(span, font){
+  const text = span.dataset.text || span.textContent; span.dataset.text = text;
+  const chars = [...text.toUpperCase()], glyphs = chars.map(c => ink(c, font));
+  span.innerHTML = '';
+  let x = 0, inkL = 1e9, inkR = -1e9, stemR = null;
+  chars.forEach((c, i) => {
+    const el = document.createElement('i'); el.textContent = c; el.style.fontStyle = 'normal';
+    if (i > 0){ const sh = pairShift(glyphs[i-1], glyphs[i], font); el.style.marginLeft = sh.toFixed(4) + 'em'; x += glyphs[i-1].adv + sh; }
+    span.appendChild(el);
+    const gl = glyphs[i];
+    gl.rows.forEach((r, y) => { if (!r) return; inkL = Math.min(inkL, x + r[0]); inkR = Math.max(inkR, x + r[1]); });
+    if (c === 'L'){ // the stem: rightmost ink in the upper two thirds of the cap height
+      let sr = -1e9; for (let y = Math.round(gl.base - .74*gl.S); y < Math.round(gl.base - .3*gl.S); y++){ const r = gl.rows[y]; if (r) sr = Math.max(sr, x + r[1]); }
+      stemR = sr;
+    }
+  });
+  return { inkL, inkR, stemR };
+}
 function fitLockup(){
   document.querySelectorAll('h1.lockup').forEach(h => {
-    const spans = [...h.children]; spans.forEach(s => s.style.fontSize = '');
-    const base = parseFloat(getComputedStyle(h).fontSize), target = Math.max(...spans.map(s => s.getBoundingClientRect().width));
-    spans.forEach(s => { const w = s.getBoundingClientRect().width; s.style.fontSize = (base*target/w).toFixed(2) + 'px'; });
+    const cs = getComputedStyle(h), font = { weight: cs.fontWeight, family: cs.fontFamily }, base = parseFloat(cs.fontSize);
+    const [l1, l2] = [...h.children];
+    l1.style.fontSize = l2.style.fontSize = '';
+    const a = setLine(l1, font), b = setLine(l2, font);
+    // line 2 at the base size; line 1 scaled so its ink spans line 2's ink-left → L stem
+    const target = ((b.stemR ?? b.inkR) - b.inkL), s1 = target/(a.inkR - a.inkL);
+    l2.style.fontSize = base + 'px'; l1.style.fontSize = (base*s1).toFixed(2) + 'px';
+    // start both lines on the same ink edge
+    l1.style.marginLeft = (-a.inkL*base*s1).toFixed(2) + 'px'; l2.style.marginLeft = (-b.inkL*base).toFixed(2) + 'px';
   });
 }
 addEventListener('resize', () => { size(); fitLockup(); measure(); });
@@ -1367,18 +1556,16 @@ function applyLight(h){
   key.color.copy(KEY_N).lerp(KEY_D, day).lerp(KEY_G, gold*.8); key.intensity = lerp(1.1, 3.0, day) + gold*1.4;
   const ang = (h-6)/12*Math.PI; key.position.set(-Math.cos(ang)*22, 3 + Math.max(0,e)*16, 14);
   rim.intensity = lerp(1.3, .8, day);
-  pKey.color.copy(KEY_N).lerp(KEY_D, Math.max(day,.4)).lerp(KEY_G, gold*.6);
+  pKey.color.copy(KEY_N).lerp(KEY_D, Math.max(day,.8)).lerp(KEY_G, gold*.6); // product light stays near-neutral
   uniforms.uGain.value = lerp(1.06, .9, day);
   desk.setDaylight(day, gold);
   bloom.strength = lerp(.52, .34, day) + Math.max(0, 1 - (performance.now()-fx.snapT)/600)*.5;
   const hex = '#' + room.getHexString();
   if (hex !== roomCss){ roomCss = hex; document.documentElement.style.setProperty('--room', hex); }
 }
-const clockBtn = document.getElementById('clock'), hTime = document.getElementById('hTime'), hShift = document.getElementById('hShift');
-clockBtn.addEventListener('click', () => {
-  clock.idx = (clock.idx+1) % PRESETS.length; clock.preview = PRESETS[clock.idx];
-  clockBtn.classList.toggle('preview', clock.preview !== null);
-});
+const hTime = document.getElementById('hTime'), hShift = document.getElementById('hShift');
+// the room is always lit for night (one tuned look); only the HUD clock follows real Prague time
+const NIGHT = 1.5;
 
 // ---------- scroll → story ----------
 const secs = [...document.querySelectorAll('.ch')];
@@ -1512,7 +1699,7 @@ function frame(now){
   const want = clock.preview ?? clock.live;
   const dh = ((want - clock.shown + 36) % 24) - 12;
   clock.shown = (clock.shown + (Math.abs(dh) < .01 ? dh : dh*(reduced?1:.05)) + 24) % 24;
-  applyLight(clock.shown);
+  applyLight(NIGHT);
 
   sy += (scrollY - sy)*(reduced ? 1 : .085);
   const {prog, st} = storyAt(sy);
@@ -1610,7 +1797,7 @@ function frame(now){
     rJobs.set(String(jobs));
     rPhones.set(String(phones));
     hTime.textContent = hhmm(clock.preview ?? clock.live);
-    hShift.textContent = clock.preview === null ? shiftName(clock.live) : 'Preview · ' + shiftName(clock.preview);
+    hShift.textContent = shiftName(clock.live);
     const on = Math.max(Math.round(prog), 1) === 1 ? 0 : Math.round(prog); navLinks.forEach(l=>l.classList.toggle('on', +l.dataset.i===on));
   }
   requestAnimationFrame(frame);
@@ -1620,7 +1807,7 @@ const img = new Image();
 img.onload = () => paintFace(img);
 img.src = GROUP_IMG;
 const fontsReady = document.fonts && document.fonts.load
-  ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"'].map(f => document.fonts.load(f))).catch(()=>{})
+  ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"', '400 64px Michroma', '400 20px Outfit', '700 20px Outfit', '900 20px Outfit'].map(f => document.fonts.load(f))).catch(()=>{})
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
