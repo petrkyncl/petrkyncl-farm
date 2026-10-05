@@ -832,11 +832,32 @@ loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
   if (mats['Glass']){ mats['Glass'].roughness = .03; mats['Glass'].envMapIntensity = .22; envLit(mats['Glass'], 0); }
   if (oled){ oled.roughness = .6; oled.envMapIntensity = 0; envLit(oled, 0); }
   // the island is one black pill: its cut-out walls and the front sensors behind it must not catch light
-  if (mats['OLED off']){ mats['OLED off'].color.setHex(0x000000); mats['OLED off'].roughness = .5; mats['OLED off'].envMapIntensity = 0; }
+  // the island is pure black like the real one: its sensor housing and the frame round the cut-outs take no light at
+  // all (a black but glossy material still picks up the key light as a grey sheen)
+  const unlitBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  model.traverse(o => { if (o.isMesh && (o.material?.name === 'OLED off' || o.material?.name === 'Display Frame')) o.material = unlitBlack; });
+
   if (mats['Camera filter']){ mats['Camera filter'].color.setHex(0x030305); mats['Camera filter'].envMapIntensity = .15; }
   // the display frame lines both island cut-outs and the bezel; glossy it outlines them in grey, so it goes matte black
   if (mats['Display Frame']){ mats['Display Frame'].color.setHex(0x000000); mats['Display Frame'].roughness = .9; mats['Display Frame'].envMapIntensity = 0; }
   phone.add(model);
+  phone.updateMatrixWorld(true);
+  // the model's screen has a hole where the island is and nothing behind it, so you could see through to the inside of
+  // the back: a black panel right behind the OLED closes it, the way the real display stack does
+  let oledMesh = null; model.traverse(o => { if (o.isMesh && [].concat(o.material).some(m => m?.name === 'OLED')) oledMesh = o; });
+  if (oledMesh){
+    oledMesh.geometry.computeBoundingBox();
+    const toPhone = new THREE.Matrix4().copy(phone.matrixWorld).invert().multiply(oledMesh.matrixWorld);
+    const bb = new THREE.Box3(), gb = oledMesh.geometry.boundingBox, v = new THREE.Vector3();
+    for (let i = 0; i < 8; i++) bb.expandByPoint(v.set(i & 1 ? gb.max.x : gb.min.x, i & 2 ? gb.max.y : gb.min.y, i & 4 ? gb.max.z : gb.min.z).applyMatrix4(toPhone));
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(bb.max.x - bb.min.x, bb.max.y - bb.min.y), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    back.position.set((bb.min.x + bb.max.x)/2, (bb.min.y + bb.max.y)/2, bb.min.z - .0015); phone.add(back);
+  }
+  // debug: ?dbgmat=<material name> paints that material red, to find what is what on the model
+  const dbg = new URLSearchParams(location.search).get('dbgmat');
+  const dbgHide = new URLSearchParams(location.search).get('dbghide');
+  if (dbgHide) model.traverse(o => { if (o.isMesh && [].concat(o.material).some(m => m?.name === dbgHide)) o.visible = false; });
+  if (dbg && mats[dbg]){ mats[dbg].color?.setRGB(1, 0, 0); if (mats[dbg].emissive) mats[dbg].emissive.setRGB(1, 0, 0); mats[dbg].needsUpdate = true; }
 }).catch(e => console.warn('iPhone model failed, keeping the procedural one', e));
 const ATTACH = new THREE.Vector3(ph.magsafe[0], ph.magsafe[1], ph.backZ - CARD.d/2 - .0006);
 const soundRings = []; // (replaced by the edge light below)
@@ -1417,7 +1438,8 @@ function drawWear(p, t){
     g.fillStyle = '#fff'; heart2d(g, -78, 4, 15); g.font = `600 23px ${SF}`; g.fillText('Send pulse', 14, 1);
     g.restore();
   } else {
-    g.fillStyle = done > 0 ? WC.pulse : WC.stone; g.font = `500 20px ${SF}`;
+    // quiet confirmation in the app's ink; the brand's red is only for the heartbeat itself
+    g.fillStyle = WC.stone; g.font = `500 20px ${SF}`;
     g.fillText(done > 0 ? 'Delivered with a photo and a note' : 'On its way to Zuzka', UW/2, by + 42);
   }
   g.textAlign = 'left';
@@ -1431,7 +1453,8 @@ function drawMemories(q, t){
   g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('‹ Zuzka', M, 118);
   g.fillStyle = WC.ink; g.font = `300 64px ${SERIF}`; g.fillText('Memories', M, 192);
   g.fillStyle = WC.stone; g.font = `400 19px ${SF}`; g.fillText('412 days · 1,284 pulses · 37 photos', M + 2, 242);
-  const land = outBack(smooth(.15, .45, q)), drop = 132*smooth(.15, .45, q);
+  // first the list opens a gap at the top, then today's entry drops into it
+  const drop = 132*smooth(.1, .3, q), land = outBack(smooth(.3, .5, q));
   const label = (txt, y) => { g.fillStyle = WC.mute; g.font = `600 15px ${SF}`; g.letterSpacing = '2px'; g.fillText(txt, M + 2, y); g.letterSpacing = '0px'; };
   const card = (y, lead, title, sub, time) => {
     g.fillStyle = '#fff'; rr(M, y, W, 112, 26); g.fill(); g.strokeStyle = WC.line; g.lineWidth = 1.5; rr(M, y, W, 112, 26); g.stroke();
@@ -1443,7 +1466,7 @@ function drawMemories(q, t){
   const tile = (bg, icon, col) => (x, y) => { g.fillStyle = bg; rr(x, y, 76, 76, 18); g.fill(); if (icon === 'heart'){ g.fillStyle = col; heart2d(g, x + 38, y + 42, 18); } else wcIcon(icon, x + 38, y + 38, 34, col); };
   let y = 300;
   label('TODAY', y);
-  if (land > 0){ g.save(); g.globalAlpha = Math.min(1, land); g.translate(0, (1 - land)*-40); card(y + 24, (x, yy) => wcThumb(x, yy, 76, 18), 'You sent a pulse', `“${WC_NOTE}” · with a photo`, '18:42'); g.restore(); }
+  if (land > 0){ g.save(); g.globalAlpha = Math.min(1, land); g.translate(0, (1 - land)*-28); card(y + 24, (x, yy) => wcThumb(x, yy, 76, 18), 'You sent a pulse', `“${WC_NOTE}” · with a photo`, '18:42'); g.restore(); }
   y += drop + 40;
   label('YESTERDAY', y); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'Zuzka sent a pulse', 'You were at work', '21:07');
   y += 176;
@@ -2174,6 +2197,7 @@ const WRITE_VH = .42, PARA_PAUSE = 10; // scroll per letter (% of the viewport h
 const writing = secs.map(sec => {
   const chars = [], stops = []; // stops[k]: the char index at which paragraph k starts, in "typed" units
   let t = 0;
+  if (sec.id === 'c0') return { sec, chars: [], total: 0, cur: null, shown: -1, lastMove: 0 }; // the opening line is simply there
   sec.querySelectorAll('.copy > p:not(.foot)').forEach((p, pi) => {
     if (pi) t += PARA_PAUSE;
     const walk = node => [...node.childNodes].forEach(n => {
@@ -2539,26 +2563,36 @@ const fontsReady = document.fonts && document.fonts.load
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
-if (SHOT){ window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; window.__goSt = st => scrollTo(0, scrollForSt(st)); } // for headless checks
+if (SHOT){ window.__pick = (x, y) => { const r = new THREE.Raycaster(); r.setFromCamera(new THREE.Vector2(x/innerWidth*2 - 1, -(y/innerHeight)*2 + 1), camera); return r.intersectObject(phone, true).slice(0, 8).map(h => `${[].concat(h.object.material).map(m => m.name || m.type).join('|')} @${h.distance.toFixed(4)} vis:${h.object.visible}`); }; window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; window.__goSt = st => scrollTo(0, scrollForSt(st)); } // for headless checks
 function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
   return into <= 1 ? tops[i] + into*hold : tops[i] + hold + (into-1)*innerHeight;
 }
 // ---------- loader: counts phones "coming online" as the models and fonts actually load ----------
-const ld = { el: document.getElementById('loader'), n: document.getElementById('ldN'), bar: document.getElementById('ldBar'), items: 0, total: 1, fonts: 0, t0: performance.now(), done: false };
+const ld = { el: document.getElementById('loader'), n: document.getElementById('ldN'), wallEl: document.getElementById('ldWall'), items: 0, total: 1, fonts: 0, t0: performance.now(), done: false };
 THREE.DefaultLoadingManager.onStart = (u, l, t) => { ld.total = Math.max(ld.total, t); };
 THREE.DefaultLoadingManager.onProgress = (u, l, t) => { ld.items = l; ld.total = Math.max(ld.total, t); paintLoader(); };
 THREE.DefaultLoadingManager.onLoad = () => { ld.items = ld.total; paintLoader(); finishLoader(); };
+// the loader's wall: 64 phones in a shuffled order, each lighting as its share of the load arrives; the newest ones
+// flash amber or green for a moment, like the status lights on the real wall
+const LD_CELLS = [...(ld.wallEl?.children || [])]; // the 64 cells are in the HTML, so the wall is there before any script loads
+const LD_ORDER = LD_CELLS.map((_, i) => i).sort(() => Math.random() - .5);
+let ldLit = 0;
 function paintLoader(){
   const p = clamp01(.15*ld.fonts + .85*(ld.items/ld.total));
-  ld.n.textContent = String(Math.round(p*512)).padStart(3, '0');
-  ld.bar.style.transform = `scaleX(${p})`;
+  if (ld.n) ld.n.textContent = String(Math.round(p*512)).padStart(3, '0');
+  const want = Math.round(p*LD_CELLS.length);
+  for (; ldLit < want; ldLit++){
+    const c = LD_CELLS[LD_ORDER[ldLit]];
+    c.className = Math.random() < .25 ? 'amb' : 'grn';
+    setTimeout(() => { c.className = 'on'; }, 260 + Math.random()*240);
+  }
 }
 function finishLoader(){
   if (ld.done || !ld.fonts || ld.items < ld.total) return;
   ld.done = true;
   // let the domains roll for a moment at least (they keep rolling as it fades), then lift and let the desk light come up
-  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, Math.max(0, 1400 - (performance.now() - ld.t0)));
+  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, Math.max(0, 900 - (performance.now() - ld.t0)));
 }
 setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } }, 9000);
 

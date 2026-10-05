@@ -16,18 +16,16 @@ html,body{background:#06070a;margin:0}
 #loader .ld-bar{width:160px;height:1px;background:rgba(238,240,246,.12);overflow:hidden}
 #loader .ld-bar i{display:block;height:100%;width:100%;background:#ffb547;box-shadow:0 0 8px #ffb547;transform:scaleX(0);transform-origin:left;transition:transform .35s ease}
 #loader.done{opacity:0;visibility:hidden}
-/* the domains roll by at one steady pace for as long as it loads: a column moved by a stepped transform, which the
-   compositor keeps running even while the page is busy compiling shaders */
-#loader .ld-dom{height:1em;overflow:hidden;font:300 clamp(30px,6vw,84px)/1 "Big Shoulders Display","Arial Narrow",ui-monospace,monospace;letter-spacing:.14em;color:#eef0f6;margin-bottom:22px}
-#loader .ld-roll{display:flex;flex-direction:column;align-items:center;animation:ldRoll 2.56s steps(8) infinite;will-change:transform}
-#loader .ld-roll span{height:1em;white-space:nowrap;text-indent:.14em}
-#loader .ld-roll em{font-style:normal;color:#ffb547}
-@keyframes ldRoll{to{transform:translateY(-8em)}}
-@media (prefers-reduced-motion: reduce){#loader .ld-roll{animation:none}}
+/* loading: a little wall of phones coming online one by one as the page actually loads, and the count under it */
+#loader .ld-wall{display:grid;grid-template-columns:repeat(16,7px);gap:5px 4px;margin-bottom:6px}
+#loader .ld-wall i{width:7px;height:13px;border-radius:2px;border:1px solid rgba(238,240,246,.16);transition:background .25s,border-color .25s,box-shadow .25s}
+#loader .ld-wall i.on{background:rgba(238,240,246,.82);border-color:rgba(238,240,246,.9)}
+#loader .ld-wall i.amb{background:#ffb547;border-color:#ffb547;box-shadow:0 0 8px #ffb547}
+#loader .ld-wall i.grn{background:#58ff9a;border-color:#58ff9a;box-shadow:0 0 8px #58ff9a}
 </style>
 </head>
 <body>
-<div id="loader" aria-hidden="true"><div class="ld-dom"><div class="ld-roll"><span>KYNCL<em>.APP</em></span><span>MATIONX<em>.COM</em></span><span>MATIONX<em>.CLOUD</em></span><span>INTERNAT<em>.CZ</em></span><span>VYCHAZKOVKA<em>.CZ</em></span><span>WEARCLOSE<em>.COM</em></span><span>PETRKYNCL<em>.COM</em></span><span>PETRKYNCL<em>.CZ</em></span></div></div><span>Connecting phones <b id="ldN">000</b> / 512</span><div class="ld-bar"><i id="ldBar"></i></div></div>
+<div id="loader" aria-hidden="true"><div class="ld-wall" id="ldWall"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span>Connecting phones <b id="ldN">000</b> / 512</span></div>
 <canvas id="gl" aria-hidden="true"></canvas>
 <div id="flash" aria-hidden="true"></div>
 <svg id="dims" aria-hidden="true"><g id="dimCard" class="hot"></g><g id="dimCam"></g></svg>
