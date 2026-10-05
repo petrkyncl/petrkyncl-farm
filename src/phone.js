@@ -186,7 +186,7 @@ function grainMap(){
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.anisotropy = 8;
   return t;
 }
-export const CARD_FINISH = 'steel';
+export const CARD_FINISH = 'gloss'; // Petr's pick for now (2026-10-05); ?finish=steel|matte to compare
 export function createCard(envTex){
   const card = new THREE.Group();
   // Three finishes under consideration; ?finish=steel|matte|gloss picks one (default below).
@@ -194,7 +194,7 @@ export function createCard(envTex){
   //  matte: bead-blasted black anodised aluminium, a soft sheen, polished dark-chrome chamfer and logo
   //  gloss: piano-black ceramic, mirror clearcoat showing crisp strip reflections, polished steel chamfer
   const finish = new URLSearchParams(location.search).get('finish') || CARD_FINISH;
-  let face, chamfer, inlayColor = 0xe2e3e5;
+  let face, chamfer, inlayColor = 0xe2e3e5, inlayFrosted = false;
   if (finish === 'matte'){
     face = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:0x2a2c30, metalness:.75, roughness:.42, normalMap:grainMap(), normalScale:new THREE.Vector2(.2, .2), envMap:envTex, envMapIntensity:1.6 }), .12), .7);
     chamfer = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:0xa3a6ac, metalness:1, roughness:.08, envMap:envTex, envMapIntensity:1.4 }), .3), 1.4);
@@ -203,7 +203,7 @@ export function createCard(envTex){
     // a mirror clearcoat turns a directional light into a near-infinite peak, so it only reflects the environment
     face = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:0x060607, metalness:0, roughness:.3, clearcoat:1, clearcoatRoughness:.02, envMap:envTex, envMapIntensity:1.6 }), 0), .85);
     chamfer = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:0xc9ccd0, metalness:1, roughness:.08, envMap:envTex, envMapIntensity:1.2 }), .25), 1.4);
-    inlayColor = 0xb8bbc0;
+    inlayColor = 0x9fa2a7; inlayFrosted = true; // a frosted etch reads on gloss black from any angle; a polished one vanishes
   } else {
     const br = brushedMaps();
     face = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:0xc9ccd0, metalness:1, roughness:.2, normalMap:br.normalMap, normalScale:new THREE.Vector2(.22, .22), envMap:envTex, envMapIntensity:1 }), .04), .8);
@@ -213,7 +213,7 @@ export function createCard(envTex){
   const outZ = -CARD.d/2;
   // polished inlay wordmark, uppercase in a wide face, low on the card (seen from behind, so it reads normally)
   const mark = tex(1024, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = '400 64px Michroma, "Martian Mono", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '26px'; g.fillText('RECENTS', w/2 + 13, h/2 + 2); }, false);
-  const inlay = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:inlayColor, metalness:1, roughness:.1, envMap:envTex, envMapIntensity:1.6, alphaMap:mark, transparent:true, alphaTest:.4, depthWrite:false }), .1), 1.6);
+  const inlay = clampHDR(envLit(new THREE.MeshPhysicalMaterial({ color:inlayColor, metalness:inlayFrosted ? .2 : 1, roughness:inlayFrosted ? .55 : .1, envMap:envTex, envMapIntensity:1.6, alphaMap:mark, transparent:true, alphaTest:.4, depthWrite:false }), .1), 1.6);
   const wm = faceBack(new THREE.Mesh(new THREE.PlaneGeometry(.34, .0425), inlay)); wm.position.set(0, -CARD.h/2 + .115, outZ - .0004); card.add(wm);
   // side button on the long edge: a polished pill standing 0.8 mm proud of the edge
   // shape: 1.6 mm across the card's thickness × 11 mm along the edge; extruded 0.8 mm outwards (rotated so the
