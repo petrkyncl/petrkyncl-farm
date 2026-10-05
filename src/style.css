@@ -29,11 +29,15 @@ h1.lockup span + span{margin-top:.25em}
 .pin{position:sticky;top:0;height:100vh;height:100svh;display:flex;align-items:center;padding-inline:clamp(16px,5vw,72px);box-sizing:border-box}
 .copy{max-width:34rem;display:flex;flex-direction:column;gap:20px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.pname{font-family:var(--f-display);font-weight:900;text-transform:uppercase;font-size:clamp(52px,6.4vw,104px);line-height:.86;margin:0;display:flex;align-items:flex-start;gap:.14em;text-wrap:balance}
-.pname sup{font-family:var(--f-mono);font-weight:200;font-size:.15em;letter-spacing:.1em;color:var(--amber);padding-top:.5em;line-height:1}
+.pname{font-family:var(--f-display);font-weight:900;text-transform:uppercase;font-size:clamp(52px,6.4vw,104px);line-height:.86;margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:16px;text-wrap:balance}
+/* the chapter's index sits above its name, thin, with a short rule, the way the nav lists it */
+.pname sup{font-family:var(--f-mono);font-weight:200;font-size:clamp(11px,.9vw,13px);letter-spacing:.14em;color:var(--amber);line-height:1;display:flex;align-items:center;gap:12px;vertical-align:baseline}
+.pname sup::after{content:'';width:40px;height:1px;background:currentColor;opacity:.5}
 .copy .lead{font-weight:300;font-size:clamp(17px,1.5vw,21px);line-height:1.35;color:var(--text);max-width:26rem;text-wrap:balance}
 .copy .big{font-family:var(--f-display);color:var(--text);max-width:none;font-weight:900;text-transform:uppercase;font-size:clamp(56px,7.4vw,120px);line-height:.86;letter-spacing:-.005em;margin:0;text-wrap:balance}
 .copy p{margin:0;color:#bfc3cf;font-weight:300;font-size:clamp(13px,1vw,15px);max-width:30rem}
+/* body paragraphs that follow each other sit a little closer than the blocks of the chapter */
+.copy p:not(.lead):not(.foot) + p:not(.lead):not(.foot){margin-top:-8px}
 .foot{font-size:11px !important;color:var(--dim) !important}
 .stats{display:flex;gap:clamp(22px,3vw,44px);align-items:flex-end}
 .stats div{display:flex;flex-direction:column;gap:6px}

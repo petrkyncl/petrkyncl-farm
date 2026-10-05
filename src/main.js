@@ -153,7 +153,7 @@ const REELS = [
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
-    { src:'ivo',   full:true, fx:.3,  fy:.62, zoom:1.2 },
+    { src:'ivo',   full:true, fx:.42, fy:.5 }, // the whole frame: Ivo listening on the left, me pitching
     { src:'kate',  full:true, fx:.47, fy:.4 },
     { src:'prize', full:true, fx:.55, fy:.4 },
     { src:'group', full:true, contain:true, me:true }
@@ -2116,7 +2116,15 @@ function frame(now){
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
   const reel = REELS.find(r => st > r.from && st < r.to);
   const reelK = reel ? paintReel(reel, st) : -1;
-  if (REEL.video){ const want = st > HACK_ST - 1.4 && st < HACK_ST + 1.2; if (want && REEL.video.paused) REEL.video.play().catch(()=>{}); else if (!want && !REEL.video.paused) REEL.video.pause(); }
+  if (REEL.video){
+    const v = REEL.video, want = st > HACK_ST - 1.4 && st < HACK_ST + 1.2;
+    // the pitch is the whole raw take, uncut (it only loops after a minute and a half); it starts loading as the
+    // school chapter comes up and plays from the top every time the hackathon comes into view
+    if (st > SCHOOL_ST - 2 && v.preload !== 'auto'){ v.preload = 'auto'; v.load(); }
+    if (want && v.paused){ if (!videoOn) v.currentTime = 0; v.play().catch(()=>{}); }
+    else if (!want && !v.paused) v.pause();
+    videoOn = want;
+  }
   // "Me": over the group photo at the end of the hackathon reel, or over the one phone left at school
   let meAt = null;
   if (st >= ONE_AT + .02 && st < SCHOOL_ST + 1.02){ screens.getMatrixAt(PICK.i, tmpM); meAt = corner.set(0, SH/2 + .08, 0).applyMatrix4(tmpM).applyMatrix4(wall.matrixWorld); }
@@ -2176,13 +2184,14 @@ function grade(im, sat){
 }
 const GRADE = { school: .28, director: .28 };
 ['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
-{ const v = document.createElement('video'); v.src = '/media/pitch.mp4'; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('playsinline', ''); REEL.video = v; }
+let videoOn = false;
+{ const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"', '400 64px Michroma', '400 20px Outfit', '700 20px Outfit', '900 20px Outfit'].map(f => document.fonts.load(f))).catch(()=>{})
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
-if (SHOT) window.__ui = () => UI.toDataURL('image/png'); // headless checks read the iPhone's screen directly
+if (SHOT){ window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; } // for headless checks
 function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
   return into <= 1 ? tops[i] + into*hold : tops[i] + hold + (into-1)*innerHeight;
