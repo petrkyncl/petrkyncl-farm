@@ -145,7 +145,7 @@ function containInto(src, sw, sh, r, zoom = 1, dx = 0){
 const SCHOOL_ST = 14, HACK_ST = 16;
 // the school beats after the photos happen on the phones themselves (see the letters mode in the screen shader):
 // the wall fills with motivation letters, then goes dark until one phone is left
-const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .66, ONE_AT = SCHOOL_ST + .86;
+const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .7, ONE_AT = SCHOOL_ST + .9;
 // each reel: its items in order (how to place each one), when each one takes over, and the stretch of story time
 // it owns the face canvas for (starting a beat early so the first frame is there before the wall wipes to it)
 const REELS = [
@@ -167,7 +167,7 @@ const REELS = [
 ];
 // the captions that ride under the reel's bottom-left corner, by story time (the school's last two describe the wall)
 const CAPTIONS = [
-  { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .86].map(x => SCHOOL_ST + x),
+  { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .9].map(x => SCHOOL_ST + x),
     caps: ['Smíchovská · Prague 5', 'Radko Šablík · director', '400 motivation letters', 'One free place'] },
   { from: HACK_ST - .05, to: HACK_ST + 1.02, at: REELS[1].at,
     caps: ['The room', 'The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
@@ -675,10 +675,11 @@ const screenMat = new THREE.ShaderMaterial({
         // letters, then the wall goes dark from the outside in until one phone is left: each one squeezes to a
         // bright line and out, like an old screen switching off. The last one turns into me.
         vec3 page = letterPage(q0, vId);
-        // the radius spends most of its time near the phone (that's the part the pushed-in camera sees), and ends
-        // below zero so the nearest neighbours are fully out too
-        float r = pow(1.0 - uOne, 2.2)*${(Math.hypot(C*SX, R*SY)*1.02).toFixed(2)} - 1.7;
-        float off = (1.0 - isPick)*clamp((length((vCell - uPickCell)*vec2(${SX.toFixed(2)}, ${SY.toFixed(2)})) - r)/1.4, 0.0, 1.0);
+        // each phone goes out at its own random moment, the ones nearest the last phone leaning a little later,
+        // so it reads as a room emptying rather than a ring closing in
+        float dn = clamp(length((vCell - uPickCell)*vec2(${SX.toFixed(2)}, ${SY.toFixed(2)}))/${(Math.hypot(C*SX, R*SY)*.6).toFixed(2)}, 0.0, 1.0);
+        float th = hash(vId*7.13 + 3.1)*.84 + (1.0 - dn)*.14;
+        float off = (1.0 - isPick)*clamp((uOne - th)/.06, 0.0, 1.0);
         float half_ = .5*(1.0 - off)*(1.0 - off);
         float band = fillD(abs(vUv.y - .5) - half_, .012)*(1.0 - step(.98, off));
         page = mix(page, vec3(1.0), smoothstep(.45, .9, off)*.7);
