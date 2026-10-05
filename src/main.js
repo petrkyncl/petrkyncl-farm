@@ -153,7 +153,7 @@ const REELS = [
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
-    { src:'ivo',   full:true, contain:true, zoom:1.08, dx:.06 }, // Petr's crop: Ivo listening, the lectern, me from the shoulders down; wide, so it sits whole, shifted right of the copy
+    { src:'ivo',   full:true, contain:true, zoom:1.2, dx:.13 }, // Petr's crop: Ivo listening, the lectern, me from the shoulders down; wide, so it sits whole, shifted right of the copy
     { src:'kate',  full:true, fx:.47, fy:.4 },
     { src:'prize', full:true, fx:.55, fy:.4 },
     { src:'group', full:true, contain:true, me:true }
