@@ -125,9 +125,9 @@ let meUV = null;
 // (the camera sees roughly u .25–.8 of the wall right of the copy, so the reel stays inside that)
 function reelRegion(){ const w = faceC.width, h = faceC.height; return land ? { x: w*.3, y: h*.06, w: w*.47, h: h*.88 } : { x: 0, y: h*.03, w, h: h*.44 }; }
 // cover-fit src into the region around a focus point; returns the drawn rect
-function coverInto(src, sw, sh, r, fx, fy){
-  const s = Math.max(r.w/sw, r.h/sh), dw = sw*s, dh = sh*s;
-  const x = Math.min(r.x, Math.max(r.x + r.w - dw, r.x + r.w/2 - fx*dw)), y = Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h/2 - fy*dh));
+function coverInto(src, sw, sh, r, fx, fy, ax = .5, zoom = 1){
+  const s = Math.max(r.w/sw, r.h/sh)*zoom, dw = sw*s, dh = sh*s;
+  const x = Math.min(r.x, Math.max(r.x + r.w - dw, r.x + r.w*ax - fx*dw)), y = Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h/2 - fy*dh));
   faceG.save(); faceG.beginPath(); faceG.rect(r.x, r.y, r.w, r.h); faceG.clip(); faceG.drawImage(src, x, y, dw, dh); faceG.restore();
   return { x, y, w: dw, h: dh };
 }
@@ -144,19 +144,19 @@ const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .66, ONE_AT = SCHOOL_ST
 // each reel: its items in order (how to place each one), when each one takes over, and the stretch of story time
 // it owns the face canvas for (starting a beat early so the first frame is there before the wall wipes to it)
 const REELS = [
-  // the school photos run edge to edge on a wide wall (the building is 4:3 like the wall itself; the director lands
-  // right of the copy), graded down towards grey so they sit back like the wall's own pictures
+  // both reels run edge to edge on a wide wall (the building is 4:3 like the wall itself); the school photos are
+  // graded down towards grey so they sit back like the wall's own pictures
   { from: SCHOOL_ST - 1.4, to: LETTERS_AT + .12, at: [0, .25].map(x => SCHOOL_ST + x), items: [
     { src:'school',   full:true, fx:.5, fy:.5 },
     { src:'director', full:true, fx:.3, fy:.3 }
   ] },
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
-    { src:'video', fx:.3,  fy:.45 },
-    { src:'pitch', fx:.62, fy:.35 },
-    { src:'ivo',   fx:.3,  fy:.5 },
-    { src:'kate',  fx:.47, fy:.4 },
-    { src:'prize', fx:.55, fy:.4 },
-    { src:'group', contain:true, me:true }
+    { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
+    { src:'pitch', full:true, fx:.62, fy:.35 },
+    { src:'ivo',   full:true, fx:.3,  fy:.62, zoom:1.2 },
+    { src:'kate',  full:true, fx:.47, fy:.4 },
+    { src:'prize', full:true, fx:.55, fy:.4 },
+    { src:'group', full:true, contain:true, me:true }
   ] }
 ];
 // the captions that ride under the reel's bottom-left corner, by story time (the school's last two describe the wall)
@@ -170,11 +170,13 @@ const itemRegion = it => it.full && land ? { x: 0, y: 0, w: faceC.width, h: face
 function drawReelItem(it){
   const r = itemRegion(it), s = REEL[it.src];
   if (!s) return;
-  if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy); return; }
+  // edge to edge on a wide wall, the subject lands right of the copy (which covers about the wall's left sixth)
+  const ax = it.full && land ? .6 : .5;
+  if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy, ax, it.zoom); return; }
   if (it.contain){
     const d = containInto(s, s.width, s.height, r);
     if (it.me) meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
-  } else coverInto(s, s.width, s.height, r, it.fx, it.fy);
+  } else coverInto(s, s.width, s.height, r, it.fx, it.fy, ax, it.zoom);
 }
 // which item, and how far the sweep to the next one has got (left to right, soft edge)
 const REEL_SWEEP = .06;
@@ -1533,7 +1535,9 @@ function updateStage(st, now){
   const t = now/1000;
   const vis = smooth(3.02, 3.5, st) * (1 - smooth(9.05, 9.6, st));
   const inWall = st >= IN_WALL_FROM && st < LEAVE;
-  stage.visible = vis > .002 || inWall;
+  // the stage stays up for as long as the phone is anywhere (in the wall, sliding out, flying), not only once the
+  // dim has started: right after LEAVE the dim is still ~0 and the phone used to vanish for a few frames
+  stage.visible = vis > .002 || (st >= IN_WALL_FROM && st < 9.58);
   uniforms.uDim.value = vis;
   if (!stage.visible) return;
 
