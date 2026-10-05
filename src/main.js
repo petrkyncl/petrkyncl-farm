@@ -809,7 +809,8 @@ function place(i){
     // wall), tumbling less and less; it squares up in front of the slot, then pushes in
     const fly = easeOut(smooth(0, .62, refill)), push = easeIO(smooth(.56, .84, refill)), away = 1 - fly;
     const bz = (a, c, e) => away*away*a + 2*away*fly*c + fly*fly*e;
-    const along = bz(3.2, 2.6, 0), up = bz(-3.4, .9, 0), out = bz(3.2, 2.4, 1.6)*(1 - push);
+    // it starts well below the bottom of the frame and close to the camera, so it flies in instead of popping up
+    const along = bz(4.2, 2.8, 0), up = bz(-10.5, 1.2, 0), out = bz(6.5, 3, 1.6)*(1 - push);
     tmpP.addScaledVector(N, out).add(flyV.set(Math.cos(b.ry)*along, up, -Math.sin(b.ry)*along));
     flyQ.setFromEuler(flyE.set(.35*away, -.45*away*away, .3*away)); tmpQ.multiply(flyQ); // a light tumble, screen mostly to the camera
     k = refill > 0 ? 1 : 0; plugged = refill > .86 ? 1 : 0;
