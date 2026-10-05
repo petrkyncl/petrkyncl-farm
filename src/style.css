@@ -16,6 +16,12 @@ body{margin:0;font-family:var(--f-mono);font-size:14px;line-height:1.65;-webkit-
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
 #flash{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle at 60% 50%,#f4f6ff,#c9d4ff 70%);opacity:0}
 h1.big{font-family:var(--f-display);font-weight:900;text-transform:uppercase;font-size:clamp(64px,9vw,148px);line-height:.84;margin:0;letter-spacing:-.005em}
+/* the name as a justified lockup: each line is sized so both end at the same width (set in main.js); the gap
+   leaves room for the háček on Č */
+h1.lockup{display:flex;flex-direction:column;align-items:flex-start;width:fit-content;letter-spacing:-.012em}
+h1.lockup span{display:block;width:fit-content;line-height:.8;white-space:nowrap}
+/* room for the háček on Č, in the second line's own size */
+h1.lockup span + span{margin-top:.17em}
 .veil{position:fixed;inset:0 auto 0 0;width:calc(5vw + 34rem + 120px);background:linear-gradient(90deg,var(--room) 46%,color-mix(in srgb,var(--room) 60%,transparent) 74%,transparent);z-index:1;pointer-events:none}
 .track{position:relative;z-index:2}
 .ch{position:relative;height:calc(var(--len,100)*1vh)}

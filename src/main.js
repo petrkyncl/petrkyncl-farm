@@ -1325,7 +1325,9 @@ camera.add(desk.root);
 const flashEl = document.getElementById('flash');
 
 // ---------- post ----------
-const composer = new EffectComposer(renderer);
+// the composer renders into a multisampled target: without it the post chain drops the canvas's antialiasing
+// and long edges (the desk, phone rims) step visibly
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .74);
 composer.addPass(bloom);
@@ -1339,7 +1341,15 @@ function size(){
   placeStage();
 }
 size();
-addEventListener('resize', () => { size(); measure(); });
+// size each line of the name lockup so both lines are exactly as wide as the target width
+function fitLockup(){
+  document.querySelectorAll('h1.lockup').forEach(h => {
+    const spans = [...h.children]; spans.forEach(s => s.style.fontSize = '');
+    const base = parseFloat(getComputedStyle(h).fontSize), target = Math.max(...spans.map(s => s.getBoundingClientRect().width));
+    spans.forEach(s => { const w = s.getBoundingClientRect().width; s.style.fontSize = (base*target/w).toFixed(2) + 'px'; });
+  });
+}
+addEventListener('resize', () => { size(); fitLockup(); measure(); });
 
 // ---------- time of day ----------
 const clock = {live: pragueHours(), shown: pragueHours(), preview: null, idx: 0};
@@ -1637,6 +1647,7 @@ function finishLoader(){
 setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } }, 9000);
 
 const start = () => {
+  fitLockup();
   ld.fonts = 1; paintLoader(); finishLoader();
   paintName(); drawNotif(); measure();
   if (SHOT){ scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
