@@ -877,7 +877,9 @@ iphoneReady.then(() => loadIphone('/models/iphone-17-pro-max.glb', envTex, new T
   // the island is one black pill: its cut-out walls and the front sensors behind it must not catch light
   // the island is pure black like the real one: its sensor housing and the frame round the cut-outs take no light at
   // all (a black but glossy material still picks up the key light as a grey sheen)
-  const unlitBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  // (double-sided like the model's own materials: the frame round the display is seen from behind its faces, and a
+  // one-sided replacement made the whole black bezel vanish, showing the insides of the buttons and the port)
+  const unlitBlack = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
   model.traverse(o => { if (o.isMesh && (o.material?.name === 'OLED off' || o.material?.name === 'Display Frame')) o.material = unlitBlack; });
 
   if (mats['Camera filter']){ mats['Camera filter'].color.setHex(0x030305); mats['Camera filter'].envMapIntensity = .15; }
@@ -2556,6 +2558,11 @@ function frame(now){
   U.uPickOn.value = smooth(ONE_AT - .04, ONE_AT + .02, st);
   updateRoad(st, now);
 
+  // depth precision: the dive into the MacBook needs a near plane a hair from the lens, but kept for the rest it leaves
+  // too little precision for the phone's tight parts (on a phone GPU the side buttons showed through the frame), so once
+  // we're out on the wall it moves out to where the nearest things actually are
+  const near = st < 1.15 ? .1 : 1.2;
+  if (camera.near !== near){ camera.near = near; camera.updateProjectionMatrix(); }
   const deskP = 1 - smooth(.97, 1.03, st);
   wall.visible = deskP < .999;
   // the desk brings its own lights; the wall's blue-tinted rig stays out of the room

@@ -29,7 +29,9 @@ else { cam.position.set(0, 0, -5); }
 cam.lookAt(0, 0, 0);
 if (useGlb){
   const { model, mats } = await loadIphone('/models/iphone-17-pro-max.glb', envTex);
-  window.mats = mats; paint(mats, DEEP_BLUE); scene.add(model);
+  window.mats = mats; paint(mats, DEEP_BLUE);
+  // ?rot=0.5 turns the phone about its upright, to look at a side
+  const pivot = new THREE.Group(); pivot.add(model); pivot.rotation.y = +(new URLSearchParams(location.search).get('rot') || 0); scene.add(pivot);
   // ?red=Mat%20Name,Other  paints materials red to identify parts
   (new URLSearchParams(location.search).get('red') || '').split(',').filter(Boolean).forEach(n => { const m = mats[n]; if (m){ m.color.setHex(0xff0000); if (m.emissive) m.emissive.setHex(0x660000); m.map = null; m.needsUpdate = true; } });
   console.log(Object.keys(mats).join(', '));
