@@ -131,8 +131,8 @@ function coverInto(src, sw, sh, r, fx, fy, ax = .5, zoom = 1){
   faceG.save(); faceG.beginPath(); faceG.rect(r.x, r.y, r.w, r.h); faceG.clip(); faceG.drawImage(src, x, y, dw, dh); faceG.restore();
   return { x, y, w: dw, h: dh };
 }
-function containInto(src, sw, sh, r){
-  const s = Math.min(r.w/sw, r.h/sh), dw = sw*s, dh = sh*s, x = r.x + (r.w - dw)/2, y = land ? r.y + r.h - dh : r.y;
+function containInto(src, sw, sh, r, zoom = 1, dx = 0){
+  const s = Math.min(r.w/sw, r.h/sh)*zoom, dw = sw*s, dh = sh*s, x = r.x + (r.w - dw)/2 + dx*r.w, y = land ? r.y + r.h - dh : r.y;
   faceG.drawImage(src, x, y, dw, dh); return { x, y, w: dw, h: dh };
 }
 // Two reels share the face canvas: the school (section 7) and the hackathon (section 8). Story time `st` holds
@@ -153,7 +153,7 @@ const REELS = [
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
-    { src:'ivo',   full:true, fx:.42, fy:.5 }, // the whole frame: Ivo listening on the left, me pitching
+    { src:'ivo',   full:true, contain:true, zoom:1.08, dx:.06 }, // Petr's crop: Ivo listening, the lectern, me from the shoulders down; wide, so it sits whole, shifted right of the copy
     { src:'kate',  full:true, fx:.47, fy:.4 },
     { src:'prize', full:true, fx:.55, fy:.4 },
     { src:'group', full:true, contain:true, me:true }
@@ -174,7 +174,7 @@ function drawReelItem(it){
   const ax = it.full && land ? .6 : .5;
   if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy, ax, it.zoom); return; }
   if (it.contain){
-    const d = containInto(s, s.width, s.height, r);
+    const d = containInto(s, s.width, s.height, r, it.zoom, land ? it.dx || 0 : 0);
     if (it.me) meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
   } else coverInto(s, s.width, s.height, r, it.fx, it.fy, ax, it.zoom);
 }
