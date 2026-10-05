@@ -2538,9 +2538,10 @@ function frame(now){
   // hover via raycast (off while the stage owns the frame)
   let h = -1;
   // no hover while the desk owns the frame (a hidden wall still raycasts) or while the stage does
-  // and none while the school's phones go out and the last one is left: that's a moment, not a wall to poke at
-  const quiet = st > IRIS_AT - .02 && st < SCHOOL_ST + 1.06;
-  if (ndc.x < 2 && (fine || mouseSeen || now < tapUntil) && U.uDim.value < .3 && wall.visible && !quiet){
+  // and only while the wall shows the automation: over the name, the timeline board, the photo reels, the letters,
+  // a phone lifting out to show WhatsApp would contradict what the wall is saying
+  const automation = U.uWall.value < .15 && !(st > LETTERS_AT - .05 && st < HACK_ST + 1.1);
+  if (ndc.x < 2 && (fine || mouseSeen || now < tapUntil) && U.uDim.value < .3 && wall.visible && automation){
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObject(screens, false)[0];
     if (hit && hit.instanceId !== undefined) h = hit.instanceId;
