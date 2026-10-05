@@ -11,6 +11,8 @@
 <style>
 /* critical: paint the night before any script or stylesheet arrives, so a reload never flashes white */
 html,body{background:#06070a;margin:0}
+/* no native scrollbar from the first paint (this stylesheet is inline; the main one arrives with the script) */
+html{scrollbar-width:none}html::-webkit-scrollbar{display:none}
 #loader{position:fixed;inset:0;z-index:20;background:#06070a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font:200 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.32em;text-transform:uppercase;color:#858b9c;transition:opacity .9s ease,visibility 0s .9s}
 #loader b{font-weight:300;color:#eef0f6;letter-spacing:.08em;font-variant-numeric:tabular-nums}
 #loader .ld-bar{width:160px;height:1px;background:rgba(238,240,246,.12);overflow:hidden}
@@ -23,6 +25,11 @@ html,body{background:#06070a;margin:0}
 #loader .ld-wall i.amb{background:#ffb547;border-color:#ffb547;box-shadow:0 0 8px #ffb547}
 #loader .ld-wall i.grn{background:#58ff9a;border-color:#58ff9a;box-shadow:0 0 8px #58ff9a}
 </style>
+<script>
+// a reload restores the scroll position only once the chapters have their real lengths (main.js), under the loader,
+// instead of the browser jumping there straight away and the page moving under you
+try { history.scrollRestoration = 'manual'; } catch (e) {}
+</script>
 </head>
 <body>
 <div id="loader" aria-hidden="true"><div class="ld-wall" id="ldWall"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span>Connecting phones <b id="ldN">000</b> / 512</span></div>

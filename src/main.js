@@ -91,7 +91,8 @@ const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTextur
 // "So far": the wall becomes a board that rewrites itself milestone by milestone (A = previous, B = next)
 const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
 const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
-const BOARD_PHOTOS = {}; // milestone photos, grayscale (the board is drawn as ink from its red channel)
+const BOARD_PHOTOS = {}, BOARD_FOCUS = { court: .3, studio: .43 }; // where the face is, as a share of the photo's height
+// milestone photos, grayscale (the board is drawn as ink from its red channel)
 function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
   g.fillStyle = '#000'; g.fillRect(0,0,w,h);
@@ -100,7 +101,8 @@ function paintBoard(g, tex, lines){
     // a milestone with a photo: the photo is the thing itself, its words go small along the bottom
     const r = land ? { x: 0, y: 0, w, h } : { x: w*.18, y: h*.005, w: w*.64, h: h*.235 }; // the whole fleet on a wide screen
     const s = Math.max(r.w/photo.width, r.h/photo.height), dw = photo.width*s, dh = photo.height*s;
-    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); g.drawImage(photo, r.x + (r.w - dw)/2, Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .42 : .62) - .3*dh)), dw, dh); // framed on the face
+    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); const fy = BOARD_FOCUS[lines[3]] ?? .3;
+    g.drawImage(photo, r.x + (r.w - dw)/2, Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .42 : .62) - fy*dh)), dw, dh); // framed on the face
     // the words sit at the bottom over a fade, so they read on top of the photo
     if (land){ const gr = g.createLinearGradient(0, h*.62, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(.6, 'rgba(0,0,0,.85)'); g.fillStyle = gr; g.fillRect(0, h*.62, w, h*.38); } g.restore();
     const font = (sz, wt) => `${wt} ${sz}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
@@ -236,7 +238,8 @@ function paintReel(reel, st){
 }
 // one phone's turn: 0 → 1 over its slice of the wave
 const flipOf = (i, f) => clamp01((f - aFlip[i]*(1 - FLIP_DUR))/FLIP_DUR);
-// the one phone left at the end of the school beat: picked where the reel sits, it ends up showing me on stage
+// the one phone left at the end of the school beat: picked where the reel sits, it ends up showing me at my desk,
+// the way I looked when I got in (not a later photo)
 const PICK = (() => {
   const u = land ? .55 : .5, v = land ? .48 : .74;
   const c = Math.round(u*C - .5), r = Math.round(v*R - .5);
@@ -244,10 +247,10 @@ const PICK = (() => {
 })();
 const [pickC, pickG] = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = Math.round(256*SH/SW); return [c, c.getContext('2d')]; })();
 const pickTex = new THREE.CanvasTexture(pickC);
-function paintPick(im){
-  // cover-fit the stage photo around me (head and mic, the laptop just out of frame)
+function paintPick(im, fx = .5, fy = .5){
+  // cover-fit the photo around my face
   const w = pickC.width, h = pickC.height, s = Math.max(w/im.width, h/im.height), dw = im.width*s, dh = im.height*s;
-  pickG.drawImage(im, Math.min(0, Math.max(w - dw, w/2 - .635*dw)), Math.min(0, Math.max(h - dh, h*.42 - .4*dh)), dw, dh);
+  pickG.drawImage(im, Math.min(0, Math.max(w - dw, w/2 - fx*dw)), Math.min(0, Math.max(h - dh, h*.42 - fy*dh)), dw, dh);
   pickTex.needsUpdate = true;
 }
 const N = new THREE.Vector3();
@@ -2123,6 +2126,7 @@ function fitLockup(){
   });
 }
 addEventListener('resize', () => { size(); fitLockup(); measure(); });
+addEventListener('pagehide', () => { try { sessionStorage.setItem('farm-y', String(scrollY)); } catch (e) {} });
 
 // ---------- time of day ----------
 const clock = {live: pragueHours(), shown: pragueHours(), preview: null, idx: 0};
@@ -2387,7 +2391,7 @@ const MILESTONES = [
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:'TASKER\nPROJECTS' },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:'MATIONX' },
   { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ' },
-  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS' },
+  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS', photo:'studio' },
   { date:'Feb 2026', title:'Emancipated at 16', text:'A court in Semily granted me full legal capacity. I had to prove I could support myself and knew how taxes and the paperwork work.', wall:'EMANCIPATED', note:'AT 16', photo:'court' },
   { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:'MATIONX\nSTUDIO' },
   { date:'Jun 2026', title:'Self-employed', text:'Registered my own business, still sixteen.', wall:'SELF-\nEMPLOYED', note:'AT 16' },
@@ -2444,7 +2448,10 @@ function frame(now){
     // the darkened bottom reaches a little above wherever the current copy starts (long copy, taller shade)
     const top = copies[cur]?.getBoundingClientRect().top ?? innerHeight*.4;
     veilEl.style.height = `${Math.round(Math.min(innerHeight, Math.max(innerHeight*.5, innerHeight - top + 90)))}px`;
-    copies.forEach((c, i) => { const o = i === cur ? 1 - smooth(1.0, 1.32, within) : i === cur + 1 ? smooth(1.55, 1.95, within) : i === cur - 1 ? 0 : 1; c.style.opacity = o.toFixed(3); });
+    // at school's last beat the one phone left is the point: the (long, by then read) copy steps aside for it
+    const meFade = smooth(ONE_AT, ONE_AT + .05, st)*(1 - smooth(SCHOOL_ST + 1.0, SCHOOL_ST + 1.06, st));
+    copies.forEach((c, i) => { let o = i === cur ? 1 - smooth(1.0, 1.32, within) : i === cur + 1 ? smooth(1.55, 1.95, within) : i === cur - 1 ? 0 : 1; if (i === 7) o *= 1 - meFade*.92; c.style.opacity = o.toFixed(3); });
+    veilEl.style.opacity = (1 - meFade*.9).toFixed(3);
   }
   // chapter 0 is the desk; the wall's own chapters start at 1
   const wp = Math.max(0, prog-1);
@@ -2613,8 +2620,9 @@ const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so t
 // textures the opening needs get the connection to themselves
 let reelLoading = false;
 function loadReelMedia(){ if (reelLoading) return; reelLoading = true;
-{ const im = new Image(); im.onload = () => { BOARD_PHOTOS.court = grade(im, 0); roadK = -1; }; im.src = '/media/court.jpg'; }
-['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
+{ const im = new Image(); im.onload = () => paintPick(im, .48, .48); im.src = '/media/desk-selfie.jpg'; }
+for (const n of ['court', 'studio']){ const im = new Image(); im.onload = () => { BOARD_PHOTOS[n] = grade(im, 0); roadK = -1; }; im.src = `/media/${n}.jpg`; }
+['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
 }
 let videoOn = false;
 { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
@@ -2662,6 +2670,10 @@ const start = () => {
   ld.fonts = 1; paintLoader(); finishLoader();
   paintName(); paintMacName(); drawNotif(); measure();
   if (SHOT){ window.__startIphone?.(); scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
+  else { // back to where the reader was before the reload, now that the page has its final height
+    let y = 0; try { y = +sessionStorage.getItem('farm-y') || 0; } catch (e) {}
+    if (y > 0){ scrollTo(0, Math.min(y, document.documentElement.scrollHeight - innerHeight)); sy = scrollY; }
+  }
   requestAnimationFrame(frame);
 };
 fontsReady.then(start, start);
