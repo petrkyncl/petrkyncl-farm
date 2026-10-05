@@ -91,7 +91,7 @@ const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTextur
 // "So far": the wall becomes a board that rewrites itself milestone by milestone (A = previous, B = next)
 const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
 const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
-const BOARD_PHOTOS = {}, BOARD_FOCUS = { court: .3, studio: .43 }; // where the face is, as a share of the photo's height
+const BOARD_PHOTOS = {}, BOARD_FOCUS = { court: [.5, .3], youtube: [1, .5] }; // where to frame each photo: [x, y] as shares of it (1 = its right edge)
 // milestone photos, grayscale (the board is drawn as ink from its red channel)
 function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
@@ -101,8 +101,8 @@ function paintBoard(g, tex, lines){
     // a milestone with a photo: the photo is the thing itself, its words go small along the bottom
     const r = land ? { x: 0, y: 0, w, h } : { x: w*.18, y: h*.005, w: w*.64, h: h*.235 }; // the whole fleet on a wide screen
     const s = Math.max(r.w/photo.width, r.h/photo.height), dw = photo.width*s, dh = photo.height*s;
-    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); const fy = BOARD_FOCUS[lines[3]] ?? .3;
-    g.drawImage(photo, r.x + (r.w - dw)/2, Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .42 : .62) - fy*dh)), dw, dh); // framed on the face
+    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); const [fx, fy] = BOARD_FOCUS[lines[3]] ?? [.5, .3];
+    g.drawImage(photo, Math.min(r.x, Math.max(r.x + r.w - dw, r.x + r.w*.5 - fx*dw + (fx - .5)*r.w)), Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .42 : .62) - fy*dh)), dw, dh); // framed on the face
     // the words sit at the bottom over a fade, so they read on top of the photo
     if (land){ const gr = g.createLinearGradient(0, h*.62, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(.6, 'rgba(0,0,0,.85)'); g.fillStyle = gr; g.fillRect(0, h*.62, w, h*.38); } g.restore();
     const font = (sz, wt) => `${wt} ${sz}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
@@ -2395,14 +2395,14 @@ const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:
 // The wall spells out the milestone itself big (wall: '\\n' breaks the rows), the number that matters (note) under it,
 // and the date smallest and dimmer at the bottom.
 const MILESTONES = [
-  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, and every review five stars but one (the client wrote that one was a misclick).', wall:'FIVERR', note:'31 ORDERS',
-    // real reviews from the Fiverr account, word for word (shortened to one sentence each); they take turns on the wall
+  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, rated 5.0.', wall:'FIVERR', note:'31 ORDERS · 5.0 RATING',
+    // real reviews from the Fiverr account, word for word (shortened to one sentence each); they take turns in the list
     quotes:[['Peter really knows what he is doing.', 'illustrative818'], ['I was asking for things that are far from typical, and he made it happen.', 'wizard1960'],
             ['Peter really didn’t miss a detail.', 'rafasegovia'], ['So dedicated and creative.', 'kmj123456'], ['He made everything incredibly easy for us.', 'avgroup01']] },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:'TASKER\nPROJECTS' },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:'MATIONX' },
   { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ' },
-  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS', photo:'studio' },
+  { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS', photo:'youtube' },
   { date:'Feb 2026', title:'Emancipated at 16', text:'A court in Semily granted me full legal capacity. I had to prove I could support myself and knew how taxes and the paperwork work.', wall:'EMANCIPATED', note:'AT 16', photo:'court' },
   { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:'MATIONX\nSTUDIO' },
   { date:'Jun 2026', title:'Self-employed', text:'Registered my own business, still sixteen.', wall:'SELF-\nEMPLOYED', note:'AT 16' },
@@ -2417,7 +2417,8 @@ const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; retu
 // a milestone with reviews shows one at a time, on the wall and in the list, and moves on every few seconds
 const QUOTE_MS = 3800;
 let quoteI = 0;
-const wallOf = (k, qi) => { const r = ROAD[k], q = r.m.quotes?.[qi % r.m.quotes.length]; return q ? [...r.wall, q] : r.wall; };
+const wallOf = k => ROAD[k].wall; // (the reviews are read in the list; on the wall's phones they weren't legible)
+let quoteT = 0;
 function showQuote(k, qi){ const el = ROAD[k].li.querySelector('.tl-quote'), q = ROAD[k].m.quotes?.[qi % ROAD[k].m.quotes.length]; if (el && q) el.innerHTML = `“${q[0]}” <em>${q[1]} on Fiverr</em>`; }
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
@@ -2431,10 +2432,8 @@ function updateRoad(st, now){
     // keep the current milestone at ~38% of the window
     requestAnimationFrame(() => { const li = ROAD[k].li; tlList.style.transform = `translateY(${(tlEl.clientHeight*.38 - li.offsetTop).toFixed(1)}px)`; });
   }
-  // the next review, rewritten across the wall
-  if (ROAD[k].m.quotes && now - roadT0 > QUOTE_MS && st > ROAD_ST - .3 && st < ROAD_ST + 1){
-    paintBoard(boardAG, boardATex, wallOf(k, quoteI)); quoteI++; paintBoard(boardBG, boardBTex, wallOf(k, quoteI)); showQuote(k, quoteI); roadT0 = now;
-  }
+  // the next review in the list
+  if (ROAD[k].m.quotes && now - Math.max(roadT0, quoteT) > QUOTE_MS){ quoteI++; showQuote(k, quoteI); quoteT = now; }
   uniforms.uBoardWipe.value = reduced ? 1.1 : clamp01((now - roadT0)/900)*1.1;
   tlEl.style.setProperty('--p', ((k + clamp01((st - ROAD_ST)*ROAD.length - k))/ROAD.length).toFixed(3));
 }
@@ -2644,7 +2643,7 @@ const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so t
 let reelLoading = false;
 function loadReelMedia(){ if (reelLoading) return; reelLoading = true;
 { const im = new Image(); im.onload = () => paintPick(im, .48, .48); im.src = '/media/desk-selfie.jpg'; }
-for (const n of ['court', 'studio']){ const im = new Image(); im.onload = () => { BOARD_PHOTOS[n] = grade(im, 0); roadK = -1; }; im.src = `/media/${n}.jpg`; }
+for (const n of ['court', 'youtube']){ const im = new Image(); im.onload = () => { BOARD_PHOTOS[n] = grade(im, 0); roadK = -1; }; im.src = `/media/${n}.jpg`; }
 ['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
 }
 let videoOn = false;
