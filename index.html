@@ -7,7 +7,7 @@
 <meta name="description" content="Petr Kynčl builds software that does people's work for them: MationX, Recents, Wear Close, Internát.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Martian+Mono:wght@200;300;400&family=Cormorant+Garamond:wght@300;400&family=Michroma&family=Outfit:wght@400;500;600;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@300;700;900&family=Martian+Mono:wght@200;300;400&family=Cormorant+Garamond:wght@300;400&family=Michroma&family=Outfit:wght@400;500;600;700;900&display=swap">
 <style>
 /* critical: paint the night before any script or stylesheet arrives, so a reload never flashes white */
 html,body{background:#06070a;margin:0}
@@ -16,10 +16,30 @@ html,body{background:#06070a;margin:0}
 #loader .ld-bar{width:160px;height:1px;background:rgba(238,240,246,.12);overflow:hidden}
 #loader .ld-bar i{display:block;height:100%;width:100%;background:#ffb547;box-shadow:0 0 8px #ffb547;transform:scaleX(0);transform-origin:left;transition:transform .35s ease}
 #loader.done{opacity:0;visibility:hidden}
+/* the domains flash by while it loads, then it settles on the one you're on */
+#loader .ld-dom{font:300 clamp(30px,6vw,84px)/1 "Big Shoulders Display","Arial Narrow",ui-monospace,monospace;letter-spacing:.14em;text-indent:.14em;color:#eef0f6;white-space:nowrap;margin-bottom:22px}
+#loader .ld-dom em{font-style:normal;color:#ffb547}
+#loader.settled .ld-dom{animation:ldSettle .6s cubic-bezier(.2,.8,.2,1)}
+@keyframes ldSettle{0%{letter-spacing:.3em;opacity:.4}100%{letter-spacing:.14em;opacity:1}}
 </style>
 </head>
 <body>
-<div id="loader" aria-hidden="true"><span>Connecting phones <b id="ldN">000</b> / 512</span><div class="ld-bar"><i id="ldBar"></i></div></div>
+<div id="loader" aria-hidden="true"><div class="ld-dom" id="ldDom">KYNCL<em>.APP</em></div><span>Connecting phones <b id="ldN">000</b> / 512</span><div class="ld-bar"><i id="ldBar"></i></div></div>
+<script>
+// runs before anything else loads: flash through the domains until the page is ready, then settle (window.__ldSettle)
+(function(){
+  var D = ['kyncl.app','mationx.com','mationx.cloud','internat.cz','vychazkovka.cz','wearclose.com','petrkyncl.com','petrkyncl.cz'];
+  var el = document.getElementById('ldDom'), last = -1, t = null;
+  function show(d){ var i = d.indexOf('.'); el.innerHTML = d.slice(0, i).toUpperCase() + '<em>' + d.slice(i).toUpperCase() + '</em>'; }
+  function tick(){ last = (last + 1) % D.length; show(D[last]); t = setTimeout(tick, 55); } // round and round, fast
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) tick();
+  window.__ldSettle = function(){
+    clearTimeout(t);
+    var h = location.hostname.replace(/^www\./, ''), home = D.indexOf(h) >= 0 ? h : 'petrkyncl.com';
+    show(home); document.getElementById('loader').classList.add('settled');
+  };
+})();
+</script>
 <canvas id="gl" aria-hidden="true"></canvas>
 <div id="flash" aria-hidden="true"></div>
 <svg id="dims" aria-hidden="true"><g id="dimCard" class="hot"></g><g id="dimCam"></g></svg>

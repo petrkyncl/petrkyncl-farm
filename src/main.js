@@ -98,22 +98,23 @@ function paintBoard(g, tex, lines){
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
     const rows = land ? big.split('\n') : [big.replace(/\n/g, ' ')]; // a tall screen has only a strip of wall above the copy: one row there
     // one size for every row: the largest that lets the widest row fit and the stack fit the wall's height
-    let bs = h*(land ? (rows.length > 1 ? (note ? .32 : .4) : (note ? .42 : .5)) : .085); g.font = font(bs, 900);
+    let bs = h*(land ? (rows.length > 1 ? (note ? .29 : .4) : (note ? .42 : .5)) : .085); g.font = font(bs, 900);
     const widest = Math.max(...rows.map(r => g.measureText(r).width)); if (widest > maxW){ bs *= maxW/widest; g.font = font(bs, 900); }
     // centre the whole block (name, number, date) on the wall; on a tall screen it sits at the top, the copy covers the rest
-    const below = (note ? h*(land ? .1 : .032)*1.9 : 0) + (date ? h*(land ? .036 : .016)*1.9 : 0);
+    const below = (note ? h*(land ? .1 : .032)*1.28 : 0) + (date ? h*(land ? .036 : .016)*2.2 : 0);
     const lh = bs*.86, top = land ? h*.5 - ((rows.length - 1)*lh + below)/2 + bs*.34 : h*.065 - (rows.length - 1)*lh/2 + bs*.34;
     rows.forEach((r, i) => g.fillText(r, cx, top + i*lh));
     // the number that matters (28 VIDEOS, OF 80) clearly under it, then the date, smaller and dimmer
     let y = top + (rows.length - 1)*lh;
-    const line = (txt, size, track, col) => {
+    // gap: the number sits tight under the name (it belongs to it), the date a little further off
+    const line = (txt, size, track, col, gap) => {
       let ss = size; g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*track).toFixed(1)}px`;
       const sw = g.measureText(txt).width; if (sw > maxW){ ss *= maxW/sw; g.font = font(ss, 700); }
-      g.fillStyle = col; y += ss*1.9; g.fillText(txt, cx, y);
+      g.fillStyle = col; y += ss*gap; g.fillText(txt, cx, y);
       if ('letterSpacing' in g) g.letterSpacing = '0px';
     };
-    if (note) line(note, h*(land ? .1 : .032), .08, '#fff');
-    if (date) line(date, h*(land ? .036 : .016), .32, '#8f8f8f');
+    if (note) line(note, h*(land ? .1 : .032), .08, '#fff', 1.28);
+    if (date) line(date, h*(land ? .036 : .016), .32, '#8f8f8f', 2.2);
   }
   tex.needsUpdate = true;
 }
@@ -151,7 +152,8 @@ function containInto(src, sw, sh, r, zoom = 1, dx = 0, g = faceG){
 const SCHOOL_ST = 14, HACK_ST = 16;
 // the school beats after the photos happen on the phones themselves (see the letters mode in the screen shader):
 // the wall fills with motivation letters, then goes dark until one phone is left
-const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .7, ONE_AT = SCHOOL_ST + .9;
+// the phones start going out well before the camera moves in (HOLD_EASE[7]), then it pushes in on the one left
+const LETTERS_AT = SCHOOL_ST + .5, IRIS_AT = SCHOOL_ST + .6, ONE_AT = SCHOOL_ST + .88;
 // each reel: its items in order (how to place each one), when each one takes over, and the stretch of story time
 // it owns the face canvas for (starting a beat early so the first frame is there before the wall wipes to it)
 const REELS = [
@@ -174,7 +176,7 @@ const REELS = [
 ];
 // the captions that ride under the reel's bottom-left corner, by story time (the school's last two describe the wall)
 const CAPTIONS = [
-  { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .9].map(x => SCHOOL_ST + x),
+  { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .88].map(x => SCHOOL_ST + x),
     caps: ['Smíchovská · Prague 5', 'Radko Šablík · director', '400 motivation letters', 'One free place'] },
   { from: HACK_ST - .05, to: HACK_ST + 1.02, at: REELS[1].at,
     caps: ['The room', 'The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
@@ -2159,37 +2161,55 @@ function storyAt(y){
   return {prog:i+f, st:2*i+1+f};
 }
 
-// ---------- the copy writes itself as you scroll ----------
-// Each chapter's lead and body paragraphs come in word by word, scrubbed by the scroll: the same scroll distance per
-// word everywhere (even pacing), starting once the copy is in the lower half of the screen, so it's all there well
-// before the chapter moves on. Scrolling back unwrites it. The full text stays in the DOM (screen readers, copying);
-// with reduced motion it's simply shown.
-const WRITE_VH = 1.1; // scroll per word, in % of the viewport height
+// ---------- the copy types itself as you scroll ----------
+// Each chapter's lead and body paragraphs are typed out letter by letter, scrubbed by the scroll at one speed
+// everywhere (WRITE_VH per letter, a beat's pause between paragraphs), so a long story keeps typing while the wall
+// changes behind it. An amber block cursor rides the write head: solid while letters are coming, blinking when you
+// stop; the last few letters glow amber as they land. Scrolling back deletes. Letters are hidden, not removed, so the
+// lines never reflow; the full text stays in the DOM for screen readers; reduced motion shows it all.
+const WRITE_VH = .42, PARA_PAUSE = 10; // scroll per letter (% of the viewport height); a paragraph break counts as this many letters
 const writing = secs.map(sec => {
-  const words = [];
-  const walk = node => [...node.childNodes].forEach(n => {
-    if (n.nodeType === 3){
-      const frag = document.createDocumentFragment();
-      n.textContent.split(/(\s+)/).forEach(t => {
-        if (!t) return;
-        if (/^\s+$/.test(t)){ frag.append(t); return; }
-        const w = document.createElement('span'); w.className = 'w'; w.textContent = t; frag.append(w); words.push(w);
-      });
-      n.replaceWith(frag);
-    } else if (n.nodeType === 1) walk(n);
+  const chars = [], stops = []; // stops[k]: the char index at which paragraph k starts, in "typed" units
+  let t = 0;
+  sec.querySelectorAll('.copy > p:not(.foot)').forEach((p, pi) => {
+    if (pi) t += PARA_PAUSE;
+    const walk = node => [...node.childNodes].forEach(n => {
+      if (n.nodeType === 3){
+        const frag = document.createDocumentFragment();
+        for (const ch of n.textContent){ const c = document.createElement('span'); c.className = 'c'; c.textContent = ch; frag.append(c); chars.push({ el: c, at: t++ }); }
+        n.replaceWith(frag);
+      } else if (n.nodeType === 1) walk(n);
+    });
+    walk(p);
   });
-  sec.querySelectorAll('.copy > p:not(.foot)').forEach(walk);
-  return { words, shown: -1 };
+  const cur = document.createElement('span'); cur.className = 'cur';
+  return { sec, chars, total: t, cur, shown: -1, lastMove: 0 };
 });
-function updateWriting(y){
+function updateWriting(y, now){
   const V = innerHeight;
   writing.forEach((wr, i) => {
-    const N = wr.words.length; if (!N) return;
+    const N = wr.chars.length; if (!N) return;
     // on a tall screen the copy sits at the bottom and only shows once the chapter has nearly pinned
-    const start = tops[i] - V*(land ? .55 : .12), dist = Math.max(V*.3, N*V*WRITE_VH/100);
-    const n = reduced ? N + 2 : clamp01((y - start)/dist)*(N + 2);
-    const key = Math.round(n*24); if (key === wr.shown) return; wr.shown = key;
-    wr.words.forEach((w, j) => { const o = clamp01(n - j); w.style.opacity = o.toFixed(3); w.style.transform = o < 1 ? `translateY(${((1 - o)*.28).toFixed(3)}em)` : ''; });
+    const start = tops[i] - V*(land ? .55 : .12);
+    const n = reduced ? wr.total + 1 : Math.max(0, (y - start)/(V*WRITE_VH/100));
+    const head = Math.min(wr.total, Math.floor(n));
+    // the cursor belongs to the chapter on screen: from when it starts typing until the chapter has moved on
+    const here = y > start && y < tops[i] + heights[i] - V*.35 && !reduced;
+    if (head !== wr.shown){
+      const from = Math.max(0, Math.min(head, wr.shown) - 4), to = Math.max(head, wr.shown) + 1;
+      for (const c of wr.chars){
+        if (c.at < from - 1 || c.at > to + 1) continue;
+        c.el.classList.toggle('on', c.at < head);
+        c.el.classList.toggle('hot', c.at < head && c.at >= head - 3);
+      }
+      if (wr.shown >= 0) for (const c of wr.chars) if (c.el.classList.contains('hot') && c.at < head - 3) c.el.classList.remove('hot');
+      // park the cursor after the last typed letter (or before the first)
+      let last = null; for (const c of wr.chars){ if (c.at < head) last = c; else break; }
+      if (last) last.el.after(wr.cur); else wr.chars[0].el.before(wr.cur);
+      wr.shown = head; wr.lastMove = now;
+    }
+    wr.cur.classList.toggle('show', here);
+    wr.cur.classList.toggle('typing', now - wr.lastMove < 450 && head < wr.total);
   });
 }
 
@@ -2237,7 +2257,7 @@ const S = 9; // wall chapters
 // camera keeps drifting a little (MationX the most), during a transition it travels to the next chapter.
 // The school drifts all the way to its push-in, but only once the letters are up.
 const HOLD_DRIFT = { 2: .4, 5: .12, 7: .45 };
-const HOLD_EASE = { 7: h => smooth(.45, .98, h) };
+const HOLD_EASE = { 7: h => smooth(.74, .99, h) };
 function wallCam(st){
   const sec = Math.floor(st/2), within = st - 2*sec;
   if (sec < 1) return 0;
@@ -2343,7 +2363,7 @@ function frame(now){
 
   sy += (scrollY - sy)*(reduced ? 1 : .085);
   const {prog, st} = storyAt(sy);
-  updateWriting(sy);
+  updateWriting(sy, now);
   // chapter 0 is the desk; the wall's own chapters start at 1
   const wp = Math.max(0, prog-1);
   let a = Math.floor(wp), f = wp-a; if (a>=S-1){ a=S-2; f=1; }
@@ -2532,8 +2552,11 @@ function paintLoader(){
 function finishLoader(){
   if (ld.done || !ld.fonts || ld.items < ld.total) return;
   ld.done = true;
-  // stay at least a moment so it reads as intentional, then lift and let the desk light come up
-  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, Math.max(0, 650 - (performance.now() - ld.t0)));
+  // let the domains flash for a moment at least, settle on the one you're on, hold it, then lift and let the desk light come up
+  setTimeout(() => {
+    window.__ldSettle?.();
+    setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, 700);
+  }, Math.max(0, 1700 - (performance.now() - ld.t0)));
 }
 setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } }, 9000);
 
