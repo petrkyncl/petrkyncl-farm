@@ -2409,9 +2409,10 @@ const MILESTONES = [
   { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS', photo:'youtube' },
   { date:'Feb 2026', title:'Emancipated at 16', text:'A court in Semily granted me full legal capacity. I had to prove I could support myself and knew how taxes and the paperwork work.', wall:'EMANCIPATED', note:'AT 16', photo:'court' },
   { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:'MATIONX\nSTUDIO' },
+  { date:'May 2026', title:'An office', text:'Got an office of my own, on Arbesovo náměstí in Smíchov, Prague.', wall:'OFFICE', note:'SMÍCHOV · PRAGUE' },
   { date:'Jun 2026', title:'Self-employed', text:'Registered my own business, still sixteen.', wall:'SELF-\nEMPLOYED', note:'AT 16' },
   { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:'2ND\nPLACE', note:'OF 80' },
-  { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', wall:'500+\nPHONES' }
+  { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock.', wall:'500+\nPHONES' }
 ];
 const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts holding
 const tlList = document.querySelector('.tl-list'), tlEl = document.querySelector('.tl');
