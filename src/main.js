@@ -1732,6 +1732,7 @@ const PHONE_KEYS = [
   [9.02, [0,0,0], [-.05,-.22,.03], 1],
   [9.55, [-1.3,-3.0,-.4], [.6,.9,.9], 1]
 ];
+const PHONE_KEYS_M = PHONE_KEYS.filter(k => k[4] !== 'via');
 const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), ea = new THREE.Euler(), eb = new THREE.Euler();
 const qv = new THREE.Quaternion(), ev = new THREE.Euler(), q01 = new THREE.Quaternion(), q12 = new THREE.Quaternion();
 // Keys ease in and out of each other. A key marked 'via' is a waypoint: the move from the key before it to the key
@@ -1862,7 +1863,8 @@ function updateStage(st, now){
 
   // phone
   phone.visible = st >= IN_WALL_FROM && st < 9.58;
-  pose(PHONE_KEYS, st, phone);
+  // on a phone it goes straight into the profile: the swing through the 'via' pose reads as an overshoot on a narrow screen
+  pose(isStacked() ? PHONE_KEYS_M : PHONE_KEYS, st, phone);
   emergeFromWall(st);
   // ringing: it buzzes in bursts, in the wall and on its way out, until it's answered
   if (!reduced && st > RING_AT + .04 && st < RING_AT + (ANSWERED - RING_AT)*.64 && (t*1.15) % 1 < .55){
@@ -1876,9 +1878,11 @@ function updateStage(st, now){
     // on a phone: frame the profile wider (both callouts have to fit the narrow screen) and centre the lens-to-card stretch
     // the stage sits above the screen's centre on a phone, so the camera looks up at the profile; turn the phone by
     // exactly that angle so it's still dead side-on, and it stays above the copy
-    phone.scale.multiplyScalar(1 - .42*still); phone.position.x += -.08*still;
+    // all of it eased in over the whole move into the profile (not just its last moment), so it lands in one go
+    const prof = smooth(4.43, 4.6, st)*(1 - smooth(4.68, 4.79, st));
+    phone.scale.multiplyScalar(1 - .42*prof); phone.position.x += -.08*prof;
     const yc = stage.position.y + stage.scale.y*phone.position.y, zc = stage.position.z + stage.scale.z*phone.position.z;
-    phone.quaternion.premultiply(tmpQ.setFromAxisAngle(AXIS_X, Math.atan2(yc, -zc)*still));
+    phone.quaternion.premultiply(tmpQ.setFromAxisAngle(AXIS_X, Math.atan2(yc, -zc)*prof));
     // and when its screen is the point (the transcript, Ask, Internát), the phone comes up bigger so it can be read
     const read = smooth(4.72, 4.8, st)*(1 - smooth(5.03, 5.1, st)) + smooth(7.42, 7.56, st)*(1 - smooth(8.96, 9.06, st));
     phone.scale.multiplyScalar(1 + .7*read); phone.position.y += .16*read;
