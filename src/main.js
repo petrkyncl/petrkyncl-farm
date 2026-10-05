@@ -40,18 +40,19 @@ scene.fog = new THREE.Fog(room.clone(), 24, 70);
 const camera = new THREE.PerspectiveCamera(40, 1, .1, 200);
 scene.add(camera);
 const envTex = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
-// a quiet product-photo environment for the metal card: near-black dome, two soft boxes, no hot ceiling panels
-// (RoomEnvironment's panels reflect in brushed steel as blooming hotspots)
+// The metal card's environment, built like a product-photo set for steel: a black room and a few long strip
+// softboxes. Metal shows what it reflects, so this is what makes it read as steel: bright bands on deep grey,
+// which the brushed (anisotropic) surface smears into streaks.
 const studioEnv = (() => {
   const s = new THREE.Scene();
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, vertexShader:'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader:'varying vec3 vP; void main(){ float h = normalize(vP).y; gl_FragColor = vec4(mix(vec3(.07), vec3(.17,.175,.18), smoothstep(-.4, .8, h)), 1.0); }' }));
-  s.add(dome);
-  const box = (w, h, x, y, z, v) => { const b = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(v, v, v*1.02), side: THREE.DoubleSide })); b.position.set(x, y, z); b.lookAt(0, 0, 0); s.add(b); };
-  box(7, 4, -5, 5, 4, 1.6);   // large soft key, top left front
-  box(1.2, 8, 7, 1, -2, 1.1); // strip light, right
-  box(6, 2, 0, -6, 3, .35);   // faint floor bounce
-  return new THREE.PMREMGenerator(renderer).fromScene(s, .02).texture;
+  s.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(.012, .012, .014), side: THREE.BackSide })));
+  const box = (w, h, x, y, z, v, tint = [1, 1, 1]) => { const b = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(v*tint[0], v*tint[1], v*tint[2]), side: THREE.DoubleSide })); b.position.set(x, y, z); b.lookAt(0, 0, 0); s.add(b); };
+  box(.7, 9, -4.5, 1.5, 5, 2.2);          // tall strip, front left: the main streak
+  box(.4, 9, 5.5, .5, 3, 1.5);          // thinner strip, front right
+  box(6, .9, 0, 6.5, 2, 1.1);          // horizontal strip overhead
+  box(5, 3, 0, 2, -7, .5, [.9, .95, 1.05]); // soft fill from behind
+  box(10, 4, 0, -7, 1, .06);            // a hint of floor
+  return new THREE.PMREMGenerator(renderer).fromScene(s, .01).texture;
 })();
 
 const amb = new THREE.AmbientLight(0x3a4050, 1.7); scene.add(amb);
@@ -1545,7 +1546,7 @@ const clock = {live: pragueHours(), shown: pragueHours(), preview: null, idx: 0}
 const PRESETS = [null, 7.5, 13, 19.75, 2.5];
 const ROOM_N = new THREE.Color('#05060b'), ROOM_D = new THREE.Color('#0f0e0d'), ROOM_G = new THREE.Color('#150c07');
 const AMB_N = new THREE.Color(0x2b3452), AMB_D = new THREE.Color(0x5d5850);
-const KEY_N = new THREE.Color(0x7d90ff), KEY_D = new THREE.Color(0xfff2de), KEY_G = new THREE.Color(0xffa45c);
+const KEY_N = new THREE.Color(0x9aa6cc), KEY_D = new THREE.Color(0xfff2de), KEY_G = new THREE.Color(0xffa45c);
 let roomCss = '';
 function applyLight(h){
   const e = Math.sin((h-6)/12*Math.PI);
