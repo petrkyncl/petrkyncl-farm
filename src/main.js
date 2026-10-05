@@ -1646,6 +1646,16 @@ function drawGoHome(p, t){
 function homeIndicator(dark){ ui.fillStyle = dark ? '#ffffff' : '#000000'; rr(UW/2 - 67*PT, UH - 13*PT, 134*PT, 5*PT, 2.5*PT); ui.fill(); }
 
 let uiKey = '', lastKind = '', kindSeen = '', callT0 = 0;
+// Closing an app and opening the next play out on their own once you scroll into them (the way iOS animates them after
+// a swipe), instead of being scrubbed by the scroll: stopped half way, a window squashed over the icons looked broken.
+const trans = { kind: '', v: 0, t: 0 };
+function transP(kind, p, now){
+  if (trans.kind !== kind){ trans.kind = kind; trans.v = p >= 1 ? 1 : 0; trans.t = now; }
+  const dt = Math.min(.1, (now - trans.t)/1000); trans.t = now;
+  const target = p > .02 ? 1 : 0;
+  trans.v = target > trans.v ? Math.min(target, trans.v + dt/(kind === 'home' ? .75 : 1.25)) : Math.max(target, trans.v - dt/.6);
+  return trans.v;
+}
 function renderUI(kind, p, now){
   // the call clock starts at 00:00 when the call is picked up
   if (kind === 'call' && kindSeen !== 'call') callT0 = now;
@@ -1943,12 +1953,12 @@ function updateStage(st, now){
   else if (st < 4.7) renderUI('call', st >= SNAP ? on : 0, now);
   else if (st < 4.86) renderUI('transcript', smooth(4.72, 4.86, st), now);
   else if (st < 5.04) renderUI('ask', clamp01((st-4.86)/.17), now);
-  else if (st < 5.3) renderUI('home', clamp01((st-5.04)/.26), now);
+  else if (st < 5.3) renderUI('home', transP('home', clamp01((st-5.04)/.26), now), now);
   else if (st < NFC_AT) renderUI('homeIdle', 0, now);
   else if (st < OPENED) renderUI('nfc', clamp01((st - NFC_AT)/(OPENED - NFC_AT)), now);
   else if (st < SENT_DONE) renderUI('wear', clamp01((st - OPENED)/(SENT_DONE - OPENED)), now);
   else if (st < 7.36) renderUI('memories', clamp01((st - SENT_DONE)/(7.36 - SENT_DONE)), now);
-  else if (st < 7.64) renderUI('home2', clamp01((st-7.36)/.28), now);
+  else if (st < 7.64) renderUI('home2', transP('home2', clamp01((st-7.36)/.28), now), now);
   else renderUI('internat', clamp01((st-7.64)/1.3), now);
 
   // bracelets

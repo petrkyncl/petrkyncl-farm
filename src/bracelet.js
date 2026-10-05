@@ -197,7 +197,8 @@ export function makeStrap(stone, envTex, shape = {}){
   const node = new THREE.Group();
   node.add(new THREE.Mesh(slab(NODE, NODE, NODE_D, .048, .01), bezM));
   const cap = new THREE.Mesh(slab(NODE - .022, NODE - .022, .012, .038, .005), [capM, capM]); cap.position.z = NODE_D/2 - .004; node.add(cap);
-  node.position.set(0, warp(Math.PI/2), zFront + T/2 + NODE_D/2 - .003);
+  // the strap runs into the node's sides, like a watch strap into its case, rather than the node sitting on top of it
+  node.position.set(0, warp(Math.PI/2), zFront + NODE_D*.18);
   g.add(node);
   return { g, node, bezM, capM };
 }
