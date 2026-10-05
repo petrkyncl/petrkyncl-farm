@@ -8,6 +8,7 @@ import { rrShape, slab, flat, faceBack } from './shapes.js';
 import { createDesk } from './desk.js';
 import { reel } from './reels.js';
 import { makeStrap, STRAP } from './bracelet.js';
+import { createHead } from './head.js';
 import { createPhone, createCard, outlineGeometry, loadIphone, paint, clampHDR, envLit, DEEP_BLUE_NIGHT, PD, CARD, DISPLAY, PLATEAU } from './phone.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -832,12 +833,12 @@ const edgeLight = (() => {
 
 // ---------- Wear Close bracelets (C3: a leather strap with a pin-and-hole fastening, see bracelet.js) ----------
 const BS = 1.3; // bracelets read better a touch larger than life next to the phone
-// two pieces of leather, not two copies: different wrists, bends, done up on different holes. Stone faces you with its
-// node (the phone taps it); Charcoal is turned round so its fastening shows: keeper, the stud through a hole, the holes.
-const STONE_SHAPE = { RX: .29, RZ: .228, seed: 3, OV: .9, holes: 3, studAt: .34, keeperAt: .12 };
-const CHAR_SHAPE = { RX: .31, RZ: .243, seed: 8, OV: 1.12, holes: 4, studAt: .4, keeperAt: .15 };
-const STONE_RY = -.3, CHAR_RY = 2.55;
-function makeBracelet(isStone){ const b = makeStrap(isStone, envTex, isStone ? STONE_SHAPE : CHAR_SHAPE); b.g.rotation.set(.42, isStone ? STONE_RY : CHAR_RY, 0); b.g.scale.setScalar(BS); return b; }
+// two pieces of leather, not two copies: different wrists, bends, tilts, done up on different holes. Both face you with
+// their node; Stone fastens on its right side, Charcoal on its left, so each shows its keeper, stud and holes.
+const STONE_SHAPE = { RX: .29, RZ: .226, seed: 3, OV: 1.12, holes: 3, studAt: .34, keeperAt: .12, startA: -.25 };
+const CHAR_SHAPE = { RX: .312, RZ: .246, seed: 8, OV: 1.2, holes: 4, studAt: .38, keeperAt: .14, startA: 2.2 };
+const STONE_RY = -.3, CHAR_RY = .26;
+function makeBracelet(isStone){ const b = makeStrap(isStone, envTex, isStone ? STONE_SHAPE : CHAR_SHAPE); b.g.rotation.set(isStone ? .42 : .5, isStone ? STONE_RY : CHAR_RY, isStone ? .04 : -.07); b.g.scale.setScalar(BS); return b; }
 const stone = makeBracelet(true), charcoal = makeBracelet(false);
 stage.add(stone.g, charcoal.g);
 const STONE_AT = new THREE.Vector3(-.02,-.46,.12), CHAR_AT = new THREE.Vector3(.95,.16,-.4);
@@ -1861,8 +1862,9 @@ function updateStage(st, now){
     charcoal.g.rotation.y = CHAR_RY + (1-cIn)*2.4 + (reduced?0:Math.sin(t*.5+1)*.06);
     const sinceArr = (now - fx.arriveT)/1000;
     if (st >= ARRIVE && sinceArr < .6 && !reduced){ const j = (1-sinceArr/.6)*.012; charcoal.g.position.x += (Math.random()-.5)*j; charcoal.g.position.y += (Math.random()-.5)*j; }
-    const glow = st >= ARRIVE ? .35 + .65*Math.exp(-Math.max(0,sinceArr)*2.2) : 0;
-    charcoal.bezM.emissive.setRGB(1.0,.42,.18).multiplyScalar(glow*1.6);
+    // the pulse lands: Charcoal's face glows warm for a moment, then it's black again
+    const glow = st >= ARRIVE && st < ARRIVE + .3 ? Math.exp(-Math.max(0, sinceArr)*1.6) : 0;
+    charcoal.capM.emissive.setRGB(1.0, .5, .3).multiplyScalar(glow*.9);
     stone.bezM.emissive.setRGB(1.0,.55,.3).multiplyScalar(st > 6.2 && st < 6.5 ? smooth(6.2,6.26,st)*(1-smooth(6.4,6.48,st)) : 0);
   }
   // NFC ripples at the moment of the tap
@@ -1908,12 +1910,35 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+// ---------- "Still human": Petr's head, in dots (see head.js) ----------
+// The wall dims and his head assembles beside the closing copy, turning a little with the cursor.
+const HEAD_ST = 17.35; // story time it starts assembling (the move into the last chapter)
+const headRig = new THREE.Group(); camera.add(headRig);
+let head = null;
+createHead().then(h => { head = h; headRig.add(h.group); h.group.visible = false; placeHead(); }).catch(e => console.warn('head', e));
+function placeHead(){
+  const d = 3, halfH = d*Math.tan(THREE.MathUtils.degToRad(20)), halfW = halfH*camera.aspect;
+  if (isStacked()){ headRig.position.set(0, halfH*.55, -d); headRig.scale.setScalar(.9); }
+  else { headRig.position.set(halfW*.36, -.06, -d); headRig.scale.setScalar(1.75); }
+}
+function updateHead(st, t){
+  if (!head) return 0;
+  const k = reduced ? (st > HEAD_ST ? 1 : 0) : clamp01((st - HEAD_ST)/.75);
+  head.group.visible = k > 0;
+  if (!k) return 0;
+  const u = head.uniforms;
+  u.uIn.value = k; u.uTime.value = t;
+  u.uPx.value = renderer.domElement.height/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
+  u.uScan.value = .55 - ((t*.16) % 2.4);
+  head.group.rotation.set(-pmy*.12, pmx*.32 + Math.sin(t*.3)*.05, 0);
+  return k;
+}
 function size(){
   renderer.setSize(innerWidth, innerHeight, false);
   composer.setSize(innerWidth, innerHeight);
   bloom.setSize(innerWidth*.5, innerHeight*.5);
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  placeStage();
+  placeStage(); placeHead();
 }
 size();
 // The name lockup, set by measurement rather than by the font's metrics:
@@ -2224,7 +2249,7 @@ let tapT = 0;
 document.getElementById('hDev').textContent = COUNT;
 
 // ---------- "So far" ----------
-const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:2}, {img:0}]; // … board, school reel (then letters), hackathon reel, the name again to close
+const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:2}, {t:7}]; // … board, school reel (then letters), hackathon reel; at the close the phones just keep working behind him
 // The timeline is data: add a milestone here and the chapter grows (its scroll length scales with the count).
 // wall: [big, small] is what the phone wall spells out for it.
 const MILESTONES = [
@@ -2323,6 +2348,8 @@ function frame(now){
   const stageT = paced(st - 2);
   updateSlot(stageT);
   updateStage(stageT, now);
+  const headK = updateHead(st, now/1000);
+  if (headK > 0){ uniforms.uDim.value = Math.max(uniforms.uDim.value, headK); uniforms.uGain.value *= 1 - .6*headK; } // the wall steps back behind him
 
   // hover via raycast (off while the stage owns the frame)
   let h = -1;

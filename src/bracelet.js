@@ -113,17 +113,17 @@ export function makeStrap(stone, envTex, shape = {}){
     envMap: envTex, envMapIntensity: stone ? .5 : .65
   });
   const face = new THREE.Color(stone ? 0xcdbba4 : 0x353331), edgeC = new THREE.Color(stone ? 0xa8937b : 0x1d1c1b);
-  // metal: champagne rose gold for Stone, gunmetal for Charcoal
-  const bezM = new THREE.MeshStandardMaterial({ color: stone ? 0xd8b08c : 0x3a3a3e, metalness: 1, roughness: stone ? .24 : .32, envMap: envTex, envMapIntensity: .85, emissive: 0x000000 });
+  // metal: champagne rose gold for Stone, black anodised for Charcoal
+  const bezM = new THREE.MeshStandardMaterial({ color: stone ? 0xd8b08c : 0x1d1d20, metalness: stone ? 1 : .85, roughness: stone ? .24 : .34, envMap: envTex, envMapIntensity: stone ? .85 : .7, emissive: 0x000000 });
   const studM = bezM.clone(); // the same metal, but it doesn't light up with the node when a pulse lands
   // the node's face: frosted ceramic, cream or charcoal
-  const capM = new THREE.MeshPhysicalMaterial({ color: stone ? 0xd9ccb9 : 0x232325, roughness: .6, metalness: 0, sheen: .25, sheenRoughness: .7, sheenColor: new THREE.Color(stone ? 0xffffff : 0x55555a), envMap: envTex, envMapIntensity: .55 });
+  const capM = new THREE.MeshPhysicalMaterial({ emissive: 0x000000, color: stone ? 0xd9ccb9 : 0x18181a, roughness: .6, metalness: 0, sheen: .25, sheenRoughness: .7, sheenColor: new THREE.Color(stone ? 0xffffff : 0x55555a), envMap: envTex, envMapIntensity: .55 });
 
   // the wrist's oval, never quite perfect and never in one plane (worn leather keeps its own bends, different on each
   // bracelet), flattened where the rigid node sits on it. Every term repeats once per turn, so the tail stays on the start.
-  const ph = [0, 0, 0, 0, 0].map(() => rnd()*Math.PI*2), amp = [.008 + .01*rnd(), .005 + .007*rnd(), .006 + .009*rnd()];
+  const ph = [0, 0, 0, 0, 0].map(() => rnd()*Math.PI*2), amp = [.018 + .016*rnd(), .008 + .012*rnd(), .014 + .016*rnd()];
   const wob = a => 1 + amp[0]*Math.sin(3*a + ph[0]) + amp[1]*Math.sin(5*a + ph[1]) + amp[2]*Math.sin(2*a + ph[2]);
-  const wA = .004 + .006*rnd(), wB = .002 + .004*rnd();
+  const wA = .012 + .01*rnd(), wB = .006 + .006*rnd();
   const warp = a => wA*Math.sin(2*a + ph[3]) + wB*Math.sin(3*a + ph[4]);
   const zFront = RZ*wob(Math.PI/2);
   const pathAt = (a, out) => {
@@ -132,7 +132,8 @@ export function makeStrap(stone, envTex, shape = {}){
     return out;
   };
   // the strap: from its start at the back (under), all the way round, and over its own start as the tail
-  const A0 = -Math.PI/2 - .45, A1 = A0 + Math.PI*2 + OV;
+  // where the strap starts (and so where the fastening sits): on a side, where a three-quarter view sees the stud and the holes
+  const A0 = shape.startA ?? -Math.PI/2 - .45, A1 = A0 + Math.PI*2 + OV;
   const tipLen = (W/2)/((RX + RZ)/2); // a semicircular tip, in angle
   const lift = a => T*1.04*smooth(A0 + Math.PI*2 - .32, A0 + Math.PI*2 - .03, a);
   const N = 900, frames = [], p0 = new THREE.Vector3(), p1 = new THREE.Vector3();
