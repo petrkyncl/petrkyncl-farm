@@ -98,13 +98,15 @@ function paintBoard(g, tex, lines){
   const photo = lines?.[3] && BOARD_PHOTOS[lines[3]];
   if (photo){
     // a milestone with a photo: the photo is the thing itself, its words go small along the bottom
-    const r = land ? { x: w*.3, y: h*.04, w: w*.5, h: h*.74 } : { x: w*.18, y: h*.005, w: w*.64, h: h*.235 };
+    const r = land ? { x: 0, y: 0, w, h } : { x: w*.18, y: h*.005, w: w*.64, h: h*.235 }; // the whole fleet on a wide screen
     const s = Math.max(r.w/photo.width, r.h/photo.height), dw = photo.width*s, dh = photo.height*s;
-    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); g.drawImage(photo, r.x + (r.w - dw)/2, Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .5 : .62) - .3*dh)), dw, dh); // framed on the face g.restore();
+    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); g.drawImage(photo, r.x + (r.w - dw)/2, Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .42 : .62) - .3*dh)), dw, dh); // framed on the face
+    // the words sit at the bottom over a fade, so they read on top of the photo
+    if (land){ const gr = g.createLinearGradient(0, h*.62, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(.6, 'rgba(0,0,0,.85)'); g.fillStyle = gr; g.fillRect(0, h*.62, w, h*.38); } g.restore();
     const font = (sz, wt) => `${wt} ${sz}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
     if (!land){ tex.needsUpdate = true; return; } // a tall screen has only the strip above the copy: just the photo, the list below names it
-    const cx = r.x + r.w/2; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#fff';
-    let y = r.y + r.h + h*(land ? .1 : .045);
+    const cx = w*.56; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#fff';
+    let y = h*.86;
     g.font = font(h*(land ? .085 : .032), 900); g.fillText([lines[0].replace(/\n/g, ''), lines[1]].filter(Boolean).join(' '), cx, y);
     if (lines[2]){ const ss = h*(land ? .034 : .016); g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*.32).toFixed(1)}px`; g.fillStyle = '#8f8f8f'; g.fillText(lines[2], cx, y + ss*2.2); if ('letterSpacing' in g) g.letterSpacing = '0px'; }
     tex.needsUpdate = true; return;
@@ -860,6 +862,8 @@ iphoneReady.then(() => loadIphone('/models/iphone-17-pro-max.glb', envTex, new T
   model.traverse(o => { if (o.isMesh && (o.material?.name === 'OLED off' || o.material?.name === 'Display Frame')) o.material = unlitBlack; });
 
   if (mats['Camera filter']){ mats['Camera filter'].color.setHex(0x030305); mats['Camera filter'].envMapIntensity = .15; }
+  // the earpiece slit along the top edge (and the USB-C port): a dark recess on the real phone, not a grey strip
+  if (mats['Plastic port']){ mats['Plastic port'].color.setHex(0x050506); mats['Plastic port'].roughness = .8; mats['Plastic port'].envMapIntensity = .05; }
   // the display frame lines both island cut-outs and the bezel; glossy it outlines them in grey, so it goes matte black
   if (mats['Display Frame']){ mats['Display Frame'].color.setHex(0x000000); mats['Display Frame'].roughness = .9; mats['Display Frame'].envMapIntensity = 0; }
   phone.add(model);
@@ -1419,26 +1423,24 @@ function wcIcon(kind, x, y, s, col){
 function wcThumb(x, y, w, r){ ui.save(); rr(x, y, w, w, r); ui.clip(); ui.drawImage(WC_PHOTO, x, y, w, w); ui.restore(); }
 // the send screen. p: 0 opened → attach a photo → write a note → send → it travels → delivered
 function drawWear(p, t){
-  // the send screen, just the pulse: Zuzka, the heart; a press on it at p .52, it travels from .64, she feels it at .86
-  const g = ui, M = 30, W = UW - 2*M;
+  // the tap on the bracelet is the pulse: the app opens on it already on its way, and Zuzka feels it at p .72
+  const g = ui;
   g.fillStyle = WC.cream; g.fillRect(0, 0, UW, UH);
   statusBar(false, 0);
   g.textAlign = 'center'; g.textBaseline = 'middle';
   wcMark(g, UW/2, 116, 18);
   g.fillStyle = WC.ink; g.font = `300 84px ${SERIF}`; g.fillText('Zuzka', UW/2, 206);
   g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('286 km away · 412 days together', UW/2, 262);
-  const cx = UW/2, cy = 600, press = smooth(.5, .54, p)*(1 - smooth(.58, .63, p)), sending = p > .64 && p < .86, done = smooth(.84, .9, p);
-  // idle: the heart breathes, inviting a press
-  const idle = p < .5 ? .5 + .5*Math.sin(t*2.2) : 0;
+  const cx = UW/2, cy = 600, sending = p < .72, done = smooth(.7, .78, p);
   if (sending){ const k = (t*1.3) % 1; for (let i = 0; i < 3; i++){ const kk = (k + i/3) % 1; g.strokeStyle = `rgba(196,71,60,${(1 - kk)*.5})`; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 170 + kk*140, 0, Math.PI*2); g.stroke(); } }
-  g.strokeStyle = `rgba(27,23,20,${.18 + .12*idle})`; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 182 + 6*idle, 0, Math.PI*2); g.stroke();
-  const beat = (sending ? 1 + .06*Math.max(0, Math.sin(t*8)) : 1)*(1 - .07*press);
+  g.strokeStyle = 'rgba(27,23,20,.22)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 182, 0, Math.PI*2); g.stroke();
+  const beat = sending ? 1 + .06*Math.max(0, Math.sin(t*8)) : 1 + .04*Math.exp(-(p - .72)*30)*Math.sin((p - .72)*120);
   g.fillStyle = done > 0 ? WC.pulse : WC.shell; g.beginPath(); g.arc(cx, cy, 146*beat, 0, Math.PI*2); g.fill();
   g.fillStyle = done > 0 ? '#fff' : WC.pulse; heart2d(g, cx, cy + 10, 62*beat);
   g.fillStyle = WC.ink; g.font = `400 26px ${SF}`;
-  g.fillText(done > 0 ? 'Zuzka felt it.' : sending ? 'Sending your pulse…' : 'Press to send Zuzka a pulse', cx, 870);
+  g.fillText(done > 0 ? 'Zuzka felt it.' : 'Pulse sent', cx, 870);
   g.fillStyle = WC.stone; g.font = `400 20px ${SF}`;
-  g.fillText(done > 0 ? 'Her bracelet lit up just now' : sending ? 'On its way to her bracelet' : 'She’ll feel it on her bracelet', cx, 912);
+  g.fillText(done > 0 ? 'Her bracelet lit up just now' : 'On its way to her bracelet', cx, 912);
   g.textAlign = 'left';
 }
 // Memories: the relationship as it builds up from the bracelets. q: 0 pushed in from the send screen → today's entry lands
@@ -1741,7 +1743,7 @@ const SNAP = 4.33;
 // Wear Close: the tap is read (NFC_AT), the notification opens the app (OPENED), the pulse goes out with its photo and
 // note (SEND_AT, the send screen's p .64), lands on her side (ARRIVE, p .86), then Memories (SENT_DONE → 7.36)
 const NFC_AT = 6.26, OPENED = 6.46, SENT_DONE = 7.0;
-const SEND_AT = OPENED + (SENT_DONE - OPENED)*.64, ARRIVE = OPENED + (SENT_DONE - OPENED)*.86;
+const SEND_AT = OPENED + .01, ARRIVE = OPENED + (SENT_DONE - OPENED)*.72; // the tap sent it: it travels as the app opens
 const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
 // the card glides in from beyond the frame edge, hovers over the back showing its face, then the magnet takes it
 // the card is the phone's child, so it only appears once the phone has turned its back (4.15): before that its
@@ -2177,10 +2179,9 @@ const PACE = [
     [6.0, 6.24, 40],    // on the home screen, the phone goes to the bracelet
     [6.24, 6.34, 45],   // the tag is read: "Open in Wear Close"
     [6.34, 6.46, 40],   // tapped, the app opens on Zuzka
-    [6.46, 6.62, 30],   // the app on Zuzka
-    [6.62, 6.76, 30],   // a press on the heart
-    [6.76, 6.92, 55],   // send: the pulse travels to her
-    [6.92, 7.0, 45],    // she felt it
+    [6.46, 6.62, 50],   // the app opens on the pulse, already on its way
+    [6.62, 6.85, 65],   // it travels to her bracelet
+    [6.85, 7.0, 60],    // she felt it
     [7.0, 7.36, 90]     // Memories: today's moment lands on top of the rest
   ] },
   { region: 7, beats: [[7.36, 7.64, 70], [7.64, 7.75, 30]] }, // home, open Internát
