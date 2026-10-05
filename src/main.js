@@ -986,13 +986,13 @@ function statusBar(dark, rec){
   ui.lineWidth = 1.8; rr(rx + 12, cy - 7, 30, 15, 4.5); ui.stroke(); rr(rx + 14.5, cy - 4.5, 21, 10, 2.5); ui.fill(); rr(rx + 43.5, cy - 3, 2.5, 6, 1); ui.fill();
 }
 
-const CALL = {name:'Dentist', sub:'Dr. Novák'};
+const CALL = {name:'Dentist', sub:'Dr. Miller'};
 const LINES = [
-  ['Dr. Novák','The filling is holding up really well.'],
+  ['Dr. Miller','The filling is holding up really well.'],
   ['You','Great. Anything I should do differently?'],
-  ['Dr. Novák','Floss every night, especially on the left side.'],
+  ['Dr. Miller','Floss every night, especially on the left side.'],
   ['You','And when do you want to see me again?'],
-  ['Dr. Novák','March 3rd at 9:30, for the cleaning.']
+  ['Dr. Miller','March 3rd at 9:30, for the cleaning.']
 ];
 const QUERY = 'What did the dentist tell me?';
 const ANSWER = 'Floss every night, especially on the left side. Your next visit is March 3 at 9:30.';
@@ -1129,7 +1129,7 @@ function drawTranscript(p){
   ui.beginPath(); ui.moveTo(UW - 50, 138); ui.lineTo(UW - 50, 108); ui.moveTo(UW - 60, 117); ui.lineTo(UW - 50, 107); ui.lineTo(UW - 40, 117); ui.stroke();
   avatar(82, 236, 44, 'D');
   ui.fillStyle = '#fff'; ui.font = `700 40px ${SF}`; ui.fillText(CALL.name, 146, 222);
-  ui.fillStyle = 'rgba(235,235,245,.6)'; ui.font = `400 24px ${SF}`; ui.fillText('Dr. Novák · Today 14:02 · 4:12', 146, 258);
+  ui.fillStyle = 'rgba(235,235,245,.6)'; ui.font = `400 24px ${SF}`; ui.fillText('Dr. Miller · Today 14:02 · 4:12', 146, 258);
   waveformBar(40, UW - 40, 336, 52, .15 + .7*p, 1.3);
   ui.fillStyle = 'rgba(235,235,245,.6)'; ui.font = `500 20px ${SF}`; ui.fillText(`${Math.floor((.15 + .7*p)*4.2)}:${String(Math.floor(((.15 + .7*p)*252)%60)).padStart(2,'0')}`, 40, 382);
   ui.textAlign = 'right'; ui.fillText('4:12', UW - 40, 382); ui.textAlign = 'left';
@@ -1155,8 +1155,8 @@ function drawTranscript(p){
 const ANSWER_TEXT = 'Floss every night, especially on the left side. Your next cleaning is on March 3 at 9:30.';
 const SOURCES = [
   ['call', 'Call · Dentist', '“…especially on the left side.”  2:31'],
-  ['sms',  'Notification · Messages', 'Clinic Novák: Reminder, cleaning Mar 3 9:30'],
-  ['mail', 'Gmail · Appointment confirmed', 'recepce@zubninovak.cz · Feb 12']
+  ['sms',  'Notification · Messages', 'Miller Dental: Reminder, cleaning Mar 3 9:30'],
+  ['mail', 'Gmail · Appointment confirmed', 'frontdesk@millerdental.com · Feb 12']
 ];
 function srcIcon(kind, x, y){
   ui.fillStyle = 'rgba(255,181,71,.16)'; ui.beginPath(); ui.arc(x, y, 28, 0, Math.PI*2); ui.fill();
@@ -1399,7 +1399,7 @@ function drawInternat(p, t){
 }
 // ---------- Wear Close, the real flow ----------
 // You're on the home screen, you bring the phone to your bracelet, iOS reads its NFC tag in the background and offers
-// "Open in Wear Close". Tap it, and the app opens on Zuzka: press the heart to send a pulse. It
+// "Open in Wear Close". Tap it, and the app opens on Sarah: press the heart to send a pulse. It
 // lands on her bracelet's phone, and the moment is kept in Memories (with her pulses, a capsule she left, milestones).
 const WC = { cream:'#f4eee4', ink:'#1b1714', stone:'#6e645b', mute:'#a39889', line:'#e3d9cb', pulse:'#c4473c', shell:'#ebe2d4' };
 // the photo that goes with the pulse: a sunset over water (no faces; it's somebody's evening, not a stock person)
@@ -1426,14 +1426,14 @@ function wcIcon(kind, x, y, s, col){
 function wcThumb(x, y, w, r){ ui.save(); rr(x, y, w, w, r); ui.clip(); ui.drawImage(WC_PHOTO, x, y, w, w); ui.restore(); }
 // the send screen. p: 0 opened → attach a photo → write a note → send → it travels → delivered
 function drawWear(p, t){
-  // the tap on the bracelet is the pulse: the app opens on it already on its way, and Zuzka feels it at p .72
+  // the tap on the bracelet is the pulse: the app opens on it already on its way, and Sarah feels it at p .72
   const g = ui;
   g.fillStyle = WC.cream; g.fillRect(0, 0, UW, UH);
   statusBar(false, 0);
   g.textAlign = 'center'; g.textBaseline = 'middle';
   wcMark(g, UW/2, 116, 18);
-  g.fillStyle = WC.ink; g.font = `300 84px ${SERIF}`; g.fillText('Zuzka', UW/2, 206);
-  g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('286 km away · 412 days together', UW/2, 262);
+  g.fillStyle = WC.ink; g.font = `300 84px ${SERIF}`; g.fillText('Sarah', UW/2, 206);
+  g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('180 miles away · 412 days together', UW/2, 262);
   const cx = UW/2, cy = 600, sending = p < .72, done = smooth(.7, .78, p);
   if (sending){ const k = (t*1.3) % 1; for (let i = 0; i < 3; i++){ const kk = (k + i/3) % 1; g.strokeStyle = `rgba(196,71,60,${(1 - kk)*.5})`; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 170 + kk*140, 0, Math.PI*2); g.stroke(); } }
   g.strokeStyle = 'rgba(27,23,20,.22)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 182, 0, Math.PI*2); g.stroke();
@@ -1441,7 +1441,7 @@ function drawWear(p, t){
   g.fillStyle = done > 0 ? WC.pulse : WC.shell; g.beginPath(); g.arc(cx, cy, 146*beat, 0, Math.PI*2); g.fill();
   g.fillStyle = done > 0 ? '#fff' : WC.pulse; heart2d(g, cx, cy + 10, 62*beat);
   g.fillStyle = WC.ink; g.font = `400 26px ${SF}`;
-  g.fillText(done > 0 ? 'Zuzka felt it.' : 'Pulse sent', cx, 870);
+  g.fillText(done > 0 ? 'Sarah felt it.' : 'Pulse sent', cx, 870);
   g.fillStyle = WC.stone; g.font = `400 20px ${SF}`;
   g.fillText(done > 0 ? 'Her bracelet lit up just now' : 'On its way to her bracelet', cx, 912);
   g.textAlign = 'left';
@@ -1452,7 +1452,7 @@ function drawMemories(q, t){
   g.fillStyle = WC.cream; g.fillRect(0, 0, UW, UH);
   statusBar(false, 0);
   g.textBaseline = 'middle'; g.textAlign = 'left';
-  g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('‹ Zuzka', M, 118);
+  g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('‹ Sarah', M, 118);
   g.fillStyle = WC.ink; g.font = `300 64px ${SERIF}`; g.fillText('Memories', M, 192);
   g.fillStyle = WC.stone; g.font = `400 19px ${SF}`; g.fillText('412 days · 1,284 pulses · 37 photos', M + 2, 242);
   // first the list opens a gap at the top, then today's entry drops into it
@@ -1470,9 +1470,9 @@ function drawMemories(q, t){
   label('TODAY', y);
   if (land > 0){ g.save(); g.globalAlpha = Math.min(1, land); g.translate(0, (1 - land)*-28); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'You sent a pulse', 'She felt it right away', '18:42'); g.restore(); }
   y += drop + 40;
-  label('YESTERDAY', y); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'Zuzka sent a pulse', 'You were at work', '21:07');
+  label('YESTERDAY', y); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'Sarah sent a pulse', 'You were at work', '21:07');
   y += 176;
-  label('THIS WEEK', y); card(y + 24, tile(WC.shell, 'lock', WC.ink), 'Zuzka left you a capsule', 'It opens on Friday', 'Tue');
+  label('THIS WEEK', y); card(y + 24, tile(WC.shell, 'lock', WC.ink), 'Sarah left you a capsule', 'It opens on Friday', 'Tue');
   card(y + 152, tile(WC.shell, 'star', '#b8893a'), 'Your 100th pulse', 'Since 20 August', 'Sun');
   // tab bar
   const tb = UH - 132, tw = 330, tx = UW/2 - tw/2;
@@ -1510,8 +1510,8 @@ function drawPulse(stateP, t){
   statusBar(false, 0);
   ui.textAlign = 'center'; ui.fillStyle = '#7d776c'; ui.font = `500 21px ${SF}`;
   ui.letterSpacing = '6px'; ui.fillText('WEAR CLOSE', 303, 170); ui.letterSpacing = '0px';
-  ui.fillStyle = '#1b1a18'; ui.font = `300 92px ${SERIF}`; ui.fillText('Zuzka', 300, 310);
-  ui.fillStyle = '#8a8478'; ui.font = `400 24px ${SF}`; ui.fillText('286 km away', 300, 366);
+  ui.fillStyle = '#1b1a18'; ui.font = `300 92px ${SERIF}`; ui.fillText('Sarah', 300, 310);
+  ui.fillStyle = '#8a8478'; ui.font = `400 24px ${SF}`; ui.fillText('180 miles away', 300, 366);
   const cx = 300, cy = 660;
   if (stateP >= 1){
     const k = stateP >= 2 ? 0 : (t*1.4)%1;
@@ -1521,7 +1521,7 @@ function drawPulse(stateP, t){
   ui.fillStyle = stateP >= 2 ? '#c97462' : '#e6dfd2'; ui.beginPath(); ui.arc(cx,cy,132,0,Math.PI*2); ui.fill();
   ui.fillStyle = stateP >= 2 ? '#fff' : '#1b1a18'; heart2d(ui, cx, cy+8, 58);
   ui.fillStyle = '#1b1a18'; ui.font = `400 27px ${SF}`;
-  ui.fillText(stateP >= 2 ? 'Zuzka felt it.' : stateP >= 1 ? 'Sending your pulse…' : 'Bring your phone to your bracelet', 300, 960);
+  ui.fillText(stateP >= 2 ? 'Sarah felt it.' : stateP >= 1 ? 'Sending your pulse…' : 'Bring your phone to your bracelet', 300, 960);
   ui.fillStyle = '#8a8478'; ui.font = `400 22px ${SF}`; ui.fillText('412 days together', 300, 1150);
   ui.textAlign = 'left';
 }
@@ -2182,7 +2182,7 @@ const PACE = [
   { region: 6, sec: 'c4', beats: [ // Wear Close
     [6.0, 6.24, 40],    // on the home screen, the phone goes to the bracelet
     [6.24, 6.34, 45],   // the tag is read: "Open in Wear Close"
-    [6.34, 6.46, 40],   // tapped, the app opens on Zuzka
+    [6.34, 6.46, 40],   // tapped, the app opens on Sarah
     [6.46, 6.62, 50],   // the app opens on the pulse, already on its way
     [6.62, 6.85, 65],   // it travels to her bracelet
     [6.85, 7.0, 60],    // she felt it
@@ -2367,7 +2367,7 @@ document.getElementById('copy')?.addEventListener('click', () => {
   else getSelection().selectAllChildren(document.getElementById('mailtxt'));
 });
 
-const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
+const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to sarah ♥'];
 // the automation mix, chosen per phone exactly like the shader does (hash of its seed)
 const mixJob = i => ['whatsapp · typing a reply','telegram · sending 3/12','instagram · liking the feed','tiktok · watching, liking'][aApp[i]];
 const veilEl = document.querySelector('.veil'), copies = secs.map(s => s.querySelector('.copy')), progEl = document.querySelector('#progress i'), scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
