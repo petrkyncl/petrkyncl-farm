@@ -93,7 +93,7 @@ const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
 const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
 // BOARD_FIT: shown whole in a frame instead of covering the wall (a screenshot: blown up, its webcam corner looked like a mugshot)
 const BOARD_FIT = { youtube: { x: .04, y: .04, w: .88 } }; // full width, the whole frame (never cropped into)
-const BOARD_PHOTOS = {}, BOARD_FOCUS = { court: [.5, .3], youtube: [1, .5] }; // where to frame each photo: [x, y] as shares of it (1 = its right edge)
+const BOARD_PHOTOS = {}, BOARD_FOCUS = { court: [.5, .3], youtube: [1, .5], office: [.5, .5] }; // where to frame each photo: [x, y] as shares of it (1 = its right edge)
 // milestone photos, grayscale (the board is drawn as ink from its red channel)
 function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
@@ -102,9 +102,12 @@ function paintBoard(g, tex, lines){
   if (photo){
     // a milestone with a photo: the photo is the thing itself, its words go small along the bottom
     const r = land ? { x: 0, y: 0, w, h } : { x: w*.18, y: h*.005, w: w*.64, h: h*.235 }; // the whole fleet on a wide screen
+    // (a photo, or a video: the office pan plays on the wall)
+    const pw = photo.videoWidth || photo.width, ph = photo.videoHeight || photo.height;
+    if (!pw){ tex.needsUpdate = true; return; }
     const fit = land && BOARD_FIT[lines[3]];
-    if (fit){ const fw = w*fit.w, fh = fw*photo.height/photo.width; g.drawImage(photo, w*fit.x, h*fit.y, fw, fh); }
-    const s = Math.max(r.w/photo.width, r.h/photo.height), dw = photo.width*s, dh = photo.height*s;
+    if (fit){ const fw = w*fit.w, fh = fw*ph/pw; g.drawImage(photo, w*fit.x, h*fit.y, fw, fh); }
+    const s = Math.max(r.w/pw, r.h/ph), dw = pw*s, dh = ph*s;
     g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); if (fit) g.globalAlpha = 0; const [fx, fy] = BOARD_FOCUS[lines[3]] ?? [.5, .3];
     g.drawImage(photo, Math.min(r.x, Math.max(r.x + r.w - dw, r.x + r.w*.5 - fx*dw + (fx - .5)*r.w)), Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .42 : .62) - fy*dh)), dw, dh); // framed on the face
     // the words sit at the bottom over a fade, so they read on top of the photo
@@ -2409,7 +2412,7 @@ const MILESTONES = [
   { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS', photo:'youtube' },
   { date:'Feb 2026', title:'Emancipated at 16', text:'A court in Semily granted me full legal capacity. I had to prove I could support myself and knew how taxes and the paperwork work.', wall:'EMANCIPATED', note:'AT 16', photo:'court' },
   { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:'MATIONX\nSTUDIO' },
-  { date:'May 2026', title:'An office', text:'Got an office of my own, on Arbesovo náměstí in Smíchov, Prague.', wall:'OFFICE', note:'SMÍCHOV · PRAGUE' },
+  { date:'May 2026', title:'An office', text:'Got an office of my own, on Arbesovo náměstí in Smíchov, Prague.', wall:'OFFICE', note:'SMÍCHOV · PRAGUE', photo:'office' },
   { date:'Jun 2026', title:'Self-employed', text:'Registered my own business, still sixteen.', wall:'SELF-\nEMPLOYED', note:'AT 16' },
   { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:'2ND\nPLACE', note:'OF 80' },
   { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock.', wall:'500+\nPHONES' }
@@ -2423,7 +2426,7 @@ const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; retu
 const QUOTE_MS = 3800;
 let quoteI = 0;
 const wallOf = k => ROAD[k].wall; // (the reviews are read in the list; on the wall's phones they weren't legible)
-let quoteT = 0;
+let quoteT = 0, vidT = -1;
 function showQuote(k, qi){ const el = ROAD[k].li.querySelector('.tl-quote'), q = ROAD[k].m.quotes?.[qi % ROAD[k].m.quotes.length]; if (el && q) el.innerHTML = `“${q[0]}” <em>${q[1]} on Fiverr</em>`; }
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
@@ -2437,6 +2440,13 @@ function updateRoad(st, now){
     // keep the current milestone at ~38% of the window
     requestAnimationFrame(() => { const li = ROAD[k].li; tlList.style.transform = `translateY(${(tlEl.clientHeight*.38 - li.offsetTop).toFixed(1)}px)`; });
   }
+  // a milestone with a video keeps the wall playing it (repainted as its frames change), only while it's the one shown
+  const vid = BOARD_PHOTOS[ROAD[k].m.photo];
+  for (const v of Object.values(BOARD_PHOTOS)) if (v instanceof HTMLVideoElement){
+    const want = v === vid && st > ROAD_ST - .2 && st < ROAD_ST + 1.05;
+    if (want && v.paused) v.play().catch(() => {}); else if (!want && !v.paused) v.pause();
+  }
+  if (vid instanceof HTMLVideoElement && vid.readyState >= 2 && vid.currentTime !== vidT){ vidT = vid.currentTime; paintBoard(boardBG, boardBTex, wallOf(k)); }
   // the next review in the list
   if (ROAD[k].m.quotes && now - Math.max(roadT0, quoteT) > QUOTE_MS){ quoteI++; showQuote(k, quoteI); quoteT = now; }
   uniforms.uBoardWipe.value = reduced ? 1.1 : clamp01((now - roadT0)/900)*1.1;
@@ -2648,6 +2658,10 @@ const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so t
 let reelLoading = false;
 function loadReelMedia(){ if (reelLoading) return; reelLoading = true;
 { const im = new Image(); im.onload = () => paintPick(im, .48, .48); im.src = '/media/desk-selfie.jpg'; }
+{ // the office: a slow pan around the room (4× slowed with interpolated frames, there and back, grey)
+  const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
+  v.addEventListener('loadeddata', () => { roadK = -1; }); v.src = '/media/office.mp4'; BOARD_PHOTOS.office = v;
+}
 for (const n of ['court', 'youtube']){ const im = new Image(); im.onload = () => { BOARD_PHOTOS[n] = grade(im, 0); roadK = -1; }; im.src = `/media/${n}.jpg`; }
 ['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
 }
