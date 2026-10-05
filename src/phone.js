@@ -175,7 +175,9 @@ export function createCard(envTex){
   const inlay = clampHDR(new THREE.MeshPhysicalMaterial({ color:0xe2e3e5, metalness:1, roughness:.1, envMap:envTex, envMapIntensity:1.6, alphaMap:mark, transparent:true, alphaTest:.4, depthWrite:false }), 1.6);
   const wm = faceBack(new THREE.Mesh(new THREE.PlaneGeometry(.34, .0425), inlay)); wm.position.set(0, -CARD.h/2 + .115, outZ - .0004); card.add(wm);
   // side button on the long edge: a polished pill standing 0.8 mm proud of the edge
-  const btn = new THREE.Mesh(smoothSlab(.11, .016, .008, .008, .002), chamfer);
+  // shape: 1.6 mm across the card's thickness × 11 mm along the edge; extruded 0.8 mm outwards (rotated so the
+  // extrusion points along +x, out of the edge)
+  const btn = new THREE.Mesh(smoothSlab(.016, .11, .008, .007, .002), chamfer);
   btn.rotation.y = Math.PI/2; btn.position.set(CARD.w/2 + .002, .16, 0); card.add(btn);
   // pinhole status light, top corner (left as seen from behind)
   const ledM = new THREE.MeshBasicMaterial({color:0x000000});

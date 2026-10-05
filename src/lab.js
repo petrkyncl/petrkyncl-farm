@@ -16,7 +16,7 @@ scene.add(new THREE.AmbientLight(0xffffff, .6));
 
 const useGlb = location.search.includes('glb');
 const ph = createPhone(envTex); if (!useGlb) scene.add(ph.phone);
-if (view === 'card'){ const c = createCard(envTex); c.card.position.set(0, ph.magsafe[1], ph.backZ - CARD.d/2 - .0006); ph.phone.add(c.card); }
+if (view === 'card' || location.search.includes('card')){ const c = createCard(envTex); c.card.position.set(0, ph.magsafe[1], ph.backZ - CARD.d/2 - .0006); ph.phone.add(c.card); }
 
 // orthographic, phone body filling 963 of 1024 px like the reference
 const aspect = innerWidth/innerHeight, h = PH/(963/1024);
@@ -24,6 +24,7 @@ const cam = new THREE.OrthographicCamera(-h*aspect/2, h*aspect/2, h/2, -h/2, .01
 if (view === 'front'){ cam.position.set(0, 0, 5); }
 else if (view === 'island'){ const z = .14; cam.left = -z*aspect; cam.right = z*aspect; cam.top = .737 + z; cam.bottom = .737 - z; cam.updateProjectionMatrix(); cam.position.set(0, 0, 5); }
 else if (view === 'side'){ cam.position.set(5, 0, 0); }
+else if (view === 'cardside'){ const z = .32; cam.left = -z*aspect; cam.right = z*aspect; cam.top = -.02 + z; cam.bottom = -.02 - z; cam.updateProjectionMatrix(); cam.position.set(5, 0, -.3); }
 else { cam.position.set(0, 0, -5); }
 cam.lookAt(0, 0, 0);
 if (useGlb){
