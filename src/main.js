@@ -1885,6 +1885,40 @@ function storyAt(y){
   return {prog:i+f, st:2*i+1+f};
 }
 
+// ---------- the copy writes itself as you scroll ----------
+// Each chapter's lead and body paragraphs come in word by word, scrubbed by the scroll: the same scroll distance per
+// word everywhere (even pacing), starting once the copy is in the lower half of the screen, so it's all there well
+// before the chapter moves on. Scrolling back unwrites it. The full text stays in the DOM (screen readers, copying);
+// with reduced motion it's simply shown.
+const WRITE_VH = 1.1; // scroll per word, in % of the viewport height
+const writing = secs.map(sec => {
+  const words = [];
+  const walk = node => [...node.childNodes].forEach(n => {
+    if (n.nodeType === 3){
+      const frag = document.createDocumentFragment();
+      n.textContent.split(/(\s+)/).forEach(t => {
+        if (!t) return;
+        if (/^\s+$/.test(t)){ frag.append(t); return; }
+        const w = document.createElement('span'); w.className = 'w'; w.textContent = t; frag.append(w); words.push(w);
+      });
+      n.replaceWith(frag);
+    } else if (n.nodeType === 1) walk(n);
+  });
+  sec.querySelectorAll('.copy > p:not(.foot)').forEach(walk);
+  return { words, shown: -1 };
+});
+function updateWriting(y){
+  const V = innerHeight;
+  writing.forEach((wr, i) => {
+    const N = wr.words.length; if (!N) return;
+    // on a tall screen the copy sits at the bottom and only shows once the chapter has nearly pinned
+    const start = tops[i] - V*(land ? .55 : .12), dist = Math.max(V*.3, N*V*WRITE_VH/100);
+    const n = reduced ? N + 2 : clamp01((y - start)/dist)*(N + 2);
+    const key = Math.round(n*24); if (key === wr.shown) return; wr.shown = key;
+    wr.words.forEach((w, j) => { const o = clamp01(n - j); w.style.opacity = o.toFixed(3); w.style.transform = o < 1 ? `translateY(${((1 - o)*.28).toFixed(3)}em)` : ''; });
+  });
+}
+
 // ---------- camera path ----------
 const fitDist = (R*SY/2)/Math.tan(THREE.MathUtils.degToRad(20)) * (land ? 1.12 : 1.02);
 // [wp, eye xyz, target xyz]: wp is the wall chapter position (0 name, 1 MationX, 2 Recents …). The MationX stretch
@@ -2034,6 +2068,7 @@ function frame(now){
 
   sy += (scrollY - sy)*(reduced ? 1 : .085);
   const {prog, st} = storyAt(sy);
+  updateWriting(sy);
   // chapter 0 is the desk; the wall's own chapters start at 1
   const wp = Math.max(0, prog-1);
   let a = Math.floor(wp), f = wp-a; if (a>=S-1){ a=S-2; f=1; }
