@@ -100,6 +100,14 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
   .copy{max-width:none;text-shadow:0 1px 14px rgba(5,6,10,.9),0 0 2px rgba(5,6,10,.6)}
   .veil{display:block;inset:auto 0 0 0;width:auto;height:62%;background:linear-gradient(to top,var(--room) 0%,color-mix(in srgb,var(--room) 90%,transparent) 55%,color-mix(in srgb,var(--room) 55%,transparent) 80%,transparent);transition:height .4s ease}
   .nav,.scroll{display:none}
+  /* the body window (main.js): letters take space only once typed, so the text grows from the bottom up */
+  .cbody{display:flex;flex-direction:column;justify-content:flex-end;gap:12px;overflow:hidden}
+  .cbody.over{-webkit-mask-image:linear-gradient(transparent,#000 28%);mask-image:linear-gradient(transparent,#000 28%)}
+  .cbody p{margin:0 !important;flex:none}
+  .cbody .c{display:none}
+  .cbody .c.on,.cbody.all .c{display:inline}
+  .cbody p:not(:has(.c.on)){display:none}
+  .cbody.all p{display:block !important} /* (the :has rule above is more specific) */
   .hud span{display:none}
 }
 @media (prefers-reduced-motion:reduce){body,a,button{cursor:auto}#cross{display:none}.hud i{animation:none}}

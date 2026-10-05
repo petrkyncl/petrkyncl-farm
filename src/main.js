@@ -2147,7 +2147,7 @@ function fitLockup(){
     l1.style.marginLeft = (-a.inkL*base*s1).toFixed(2) + 'px'; l2.style.marginLeft = (-b.inkL*base).toFixed(2) + 'px';
   });
 }
-addEventListener('resize', () => { size(); fitLockup(); measure(); });
+addEventListener('resize', () => { size(); fitLockup(); sizeBodies(); measure(); });
 addEventListener('pagehide', () => { try { sessionStorage.setItem('farm-y', String(scrollY)); } catch (e) {} });
 
 // ---------- time of day ----------
@@ -2277,6 +2277,23 @@ const writing = secs.map(sec => {
   const cur = document.createElement('span'); cur.className = 'cur';
   return { sec, chars, total: t, cur, shown: -1, lastMove: 0 };
 });
+// On a tall screen the copy sits at the bottom and a long story (the school) would reach up over the photo. There the body
+// paragraphs go into a window of fixed height under the title: typed letters take space as they come, the newest line at
+// the bottom, older ones sliding up and fading out at the window's top. Short copy just keeps its own height.
+const copyBodies = [];
+if (!land) secs.forEach(sec => {
+  const ps = [...sec.querySelectorAll('.copy > p:not(.lead):not(.foot):not(.big)')];
+  if (!ps.length) return;
+  const box = document.createElement('div'); box.className = 'cbody'; ps[0].before(box); box.append(...ps); copyBodies.push(box);
+});
+function sizeBodies(){
+  copyBodies.forEach(b => {
+    b.style.height = ''; b.classList.add('all'); b.classList.remove('over');
+    const h = b.scrollHeight, max = Math.round(innerHeight*.3);
+    b.classList.remove('all');
+    b.style.height = `${Math.min(h, max)}px`; b.classList.toggle('over', h > max); // ('scroll' is taken: the scroll cue)
+  });
+}
 function updateWriting(y, now){
   const V = innerHeight;
   writing.forEach((wr, i) => {
@@ -2719,7 +2736,7 @@ setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); d
 const start = () => {
   fitLockup();
   ld.fonts = 1; paintLoader(); finishLoader();
-  paintName(); paintMacName(); drawNotif(); measure();
+  paintName(); paintMacName(); drawNotif(); sizeBodies(); measure();
   if (SHOT){ window.__startIphone?.(); scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
   else { // back to where the reader was before the reload, now that the page has its final height
     let y = 0; try { y = +sessionStorage.getItem('farm-y') || 0; } catch (e) {}
