@@ -163,8 +163,8 @@ const REELS = [
     { src:'school',   full:true, fx:.5, fy:.5 },
     { src:'director', full:true, fx:.3, fy:.3 }
   ] },
-  // the pitch video holds more than twice as long as a photo: it's the one thing here worth stopping for
-  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .11, .39, .51, .63, .75, .87].map(x => HACK_ST + x), items: [
+  // the pitch video holds about half as long again as a photo: worth a pause, not so long it feels like the end
+  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .12, .32, .45, .58, .71, .84].map(x => HACK_ST + x), items: [
     { src:'crowd', full:true, fx:.5,  fy:.5 }, // the room first: how many people were there
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
@@ -2299,7 +2299,7 @@ document.getElementById('copy')?.addEventListener('click', () => {
 const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
 // the automation mix, chosen per phone exactly like the shader does (hash of its seed)
 const mixJob = i => ['whatsapp · typing a reply','telegram · sending 3/12','instagram · liking the feed','tiktok · watching, liking'][aApp[i]];
-const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
+const progEl = document.querySelector('#progress i'), scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
 const rPhones = reel(sPhones), rTaps = reel(sTaps), rHands = reel(document.getElementById('sHands')), rJobs = reel(document.getElementById('hJobs'));
@@ -2450,6 +2450,7 @@ function frame(now){
   } else { sel.style.opacity = 0; cross.style.opacity = (fine && !reduced && ndc.x<2) ? (overLink ? .35 : .9) : 0; }
 
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
+  progEl.style.transform = `scaleY(${clamp01(scrollY/Math.max(1, document.documentElement.scrollHeight - innerHeight)).toFixed(4)})`;
   const reel = REELS.find(r => st > r.from && st < r.to);
   const reelK = reel ? paintReel(reel, st) : -1;
   if (!reel) uniforms.uReelF.value = 0;
