@@ -153,7 +153,7 @@ const REELS = [
   { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
-    { src:'ivo',   full:true, contain:true, zoom:1.2, dx:.13 }, // Petr's crop: Ivo listening, the lectern, me from the shoulders down; wide, so it sits whole, shifted right of the copy
+    { src:'ivo',   full:true, fx:.1, ax:.155, fy:.5 }, // Petr's crop, edge to edge: Ivo starts just right of the copy, the lectern, my hand on it
     { src:'kate',  full:true, fx:.47, fy:.4 },
     { src:'prize', full:true, fx:.55, fy:.4 },
     { src:'group', full:true, contain:true, me:true }
@@ -171,7 +171,7 @@ function drawReelItem(it){
   const r = itemRegion(it), s = REEL[it.src];
   if (!s) return;
   // edge to edge on a wide wall, the subject lands right of the copy (which covers about the wall's left sixth)
-  const ax = it.full && land ? .6 : .5;
+  const ax = it.ax !== undefined && land ? it.ax : it.full && land ? .6 : .5;
   if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy, ax, it.zoom); return; }
   if (it.contain){
     const d = containInto(s, s.width, s.height, r, it.zoom, land ? it.dx || 0 : 0);
