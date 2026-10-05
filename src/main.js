@@ -809,8 +809,8 @@ function place(i){
     // wall), tumbling less and less; it squares up in front of the slot, then pushes in
     const fly = easeOut(smooth(0, .62, refill)), push = easeIO(smooth(.56, .84, refill)), away = 1 - fly;
     const bz = (a, c, e) => away*away*a + 2*away*fly*c + fly*fly*e;
-    // it starts well below the bottom of the frame and close to the camera, so it flies in instead of popping up
-    const along = bz(4.2, 2.8, 0), up = bz(-10.5, 1.2, 0), out = bz(6.5, 3, 1.6)*(1 - push);
+    // it starts well below the bottom of the frame, close to the wall (the iPhone is far in front by then), and flies in
+    const along = bz(-1.2, -.6, 0), up = bz(-13, 1.3, 0), out = bz(2, 1.6, 1.2)*(1 - push);
     tmpP.addScaledVector(N, out).add(flyV.set(Math.cos(b.ry)*along, up, -Math.sin(b.ry)*along));
     flyQ.setFromEuler(flyE.set(.35*away, -.45*away*away, .3*away)); tmpQ.multiply(flyQ); // a light tumble, screen mostly to the camera
     k = refill > 0 ? 1 : 0; plugged = refill > .86 ? 1 : 0;
@@ -1812,7 +1812,9 @@ function pickSlot(){
   }
 }
 // runs every frame, stage or not: the slot is empty from the moment the iPhone is in it until the replacement docks
-const REFILL_FROM = 3.42, REFILL_TO = 3.98; // stage time: the farm replaces the iPhone right away, while it's still flying to you
+// stage time: once the iPhone is well on its way to you (most of its flight done) the farm replaces it, while the slot is
+// still in view; the new phone keeps close to the wall, so the iPhone, far in front, never meets it
+const REFILL_FROM = 3.6, REFILL_TO = 3.95;
 function updateSlot(st){
   if (st < IN_WALL_FROM){ setHiddenSlot(-1); uniforms.uNewOn.value = 1; return; }
   if (slotIdx < 0) pickSlot();
@@ -2187,7 +2189,7 @@ const PACE = [
     [4.33, 4.43, 55],   // snap, then it records: the edge light breathes with the voice, the REC tag
     [4.43, 4.56, 25],   // swing towards the side
     [4.56, 4.6, 15],    // settle dead on the profile
-    [4.6, 4.68, 100],   // 2.9 mm against the 4.2 mm camera bump
+    [4.6, 4.68, 60],    // 2.9 mm against the 4.2 mm camera bump
     [4.68, 4.79, 45],   // back to the front, the call ends
     [4.79, 4.86, 75],   // the transcript fills in
     [4.86, 4.918, 40],  // typing the question
@@ -2675,7 +2677,8 @@ const fontsReady = document.fonts && document.fonts.load
   : Promise.resolve();
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
-window.__pr = () => prNow; // (for checking the adaptive resolution from a debugger)
+window.__pr = () => prNow;
+window.__slotScreen = () => { if (slotIdx < 0) return null; const b = base[slotIdx], v = new THREE.Vector3(b.x, b.y, b.z).applyMatrix4(wall.matrixWorld).project(camera); return [Math.round((v.x*.5+.5)*innerWidth), Math.round((-v.y*.5+.5)*innerHeight), +refill.toFixed(2)]; }; // (for checking the adaptive resolution from a debugger)
 if (SHOT){ window.__pick = (x, y) => { const r = new THREE.Raycaster(); r.setFromCamera(new THREE.Vector2(x/innerWidth*2 - 1, -(y/innerHeight)*2 + 1), camera); return r.intersectObject(phone, true).slice(0, 8).map(h => `${[].concat(h.object.material).map(m => m.name || m.type).join('|')} @${h.distance.toFixed(4)} vis:${h.object.visible}`); }; window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; window.__goSt = st => scrollTo(0, scrollForSt(st)); } // for headless checks
 function scrollForSt(st){
   const i = Math.min(secs.length-1, Math.floor(st/2)), hold = Math.max(0, heights[i]-innerHeight), into = st - 2*i;
