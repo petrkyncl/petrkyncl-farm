@@ -91,9 +91,24 @@ const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTextur
 // "So far": the wall becomes a board that rewrites itself milestone by milestone (A = previous, B = next)
 const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
 const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
+const BOARD_PHOTOS = {}; // milestone photos, grayscale (the board is drawn as ink from its red channel)
 function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
   g.fillStyle = '#000'; g.fillRect(0,0,w,h);
+  const photo = lines?.[3] && BOARD_PHOTOS[lines[3]];
+  if (photo){
+    // a milestone with a photo: the photo is the thing itself, its words go small along the bottom
+    const r = land ? { x: w*.3, y: h*.04, w: w*.5, h: h*.74 } : { x: w*.18, y: h*.005, w: w*.64, h: h*.235 };
+    const s = Math.max(r.w/photo.width, r.h/photo.height), dw = photo.width*s, dh = photo.height*s;
+    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); g.drawImage(photo, r.x + (r.w - dw)/2, Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h*(land ? .5 : .62) - .3*dh)), dw, dh); // framed on the face g.restore();
+    const font = (sz, wt) => `${wt} ${sz}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
+    if (!land){ tex.needsUpdate = true; return; } // a tall screen has only the strip above the copy: just the photo, the list below names it
+    const cx = r.x + r.w/2; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#fff';
+    let y = r.y + r.h + h*(land ? .1 : .045);
+    g.font = font(h*(land ? .085 : .032), 900); g.fillText([lines[0].replace(/\n/g, ''), lines[1]].filter(Boolean).join(' '), cx, y);
+    if (lines[2]){ const ss = h*(land ? .034 : .016); g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*.32).toFixed(1)}px`; g.fillStyle = '#8f8f8f'; g.fillText(lines[2], cx, y + ss*2.2); if ('letterSpacing' in g) g.letterSpacing = '0px'; }
+    tex.needsUpdate = true; return;
+  }
   if (lines && lines.length){
     // the milestone huge (rows split on '\n'), its number under it, the date smallest; all of it right of the copy column
     const [big, note, date] = lines, cx = land ? w*.56 : w/2, maxW = w*(land ? .46 : .86);
@@ -1729,7 +1744,9 @@ const NFC_AT = 6.26, OPENED = 6.46, SENT_DONE = 7.0;
 const SEND_AT = OPENED + (SENT_DONE - OPENED)*.64, ARRIVE = OPENED + (SENT_DONE - OPENED)*.86;
 const fx = {snapT:-1e9, arriveT:-1e9, shake:0, prevSt:0};
 // the card glides in from beyond the frame edge, hovers over the back showing its face, then the magnet takes it
-const CARD_FROM = new THREE.Vector3(-3.4, 1.4, -2.6), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2), CARD_IN = 4.03, CARD_HOVER = 4.2;
+// the card is the phone's child, so it only appears once the phone has turned its back (4.15): before that its
+// 'screen right' would be screen left, and the turn would swing it through the phone
+const CARD_FROM = new THREE.Vector3(-3.4, 1.4, -2.6), CARD_AWAY = new THREE.Vector3(2.6, -1.4, -2.2), CARD_IN = 4.15, CARD_HOVER = 4.25;
 const dimsEl = document.getElementById('dims'), dimCard = document.getElementById('dimCard'), dimCam = document.getElementById('dimCam');
 const recTag = document.getElementById('recTag'), recTime = document.getElementById('recTime'), recBars = [...recTag.querySelectorAll('i')];
 const dA = new THREE.Vector3(), dB = new THREE.Vector3();
@@ -2141,8 +2158,9 @@ const NIGHT = 1.5;
 const PACE = [
   { region: 4, sec: 'c3', beats: [ // Recents
     [4.0, 4.03, 25],    // the call, just answered, face on
-    [4.03, 4.15, 40],   // the card glides in while the phone turns its back
-    [4.15, 4.33, 55],   // hover over the back, the magnet takes it
+    [4.03, 4.15, 35],   // the phone turns its back
+    [4.15, 4.25, 40],   // the card glides in from the right
+    [4.25, 4.33, 40],   // hover over the back, the magnet takes it
     [4.33, 4.43, 55],   // snap, then it records: the edge light breathes with the voice, the REC tag
     [4.43, 4.56, 25],   // swing towards the side
     [4.56, 4.6, 15],    // settle dead on the profile
@@ -2369,7 +2387,9 @@ const MILESTONES = [
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:'MATIONX' },
   { date:'Sep 2025', title:'Smíchovská', text:'Moved schools, straight into the second year.', wall:'SMÍCHOVSKÁ' },
   { date:'Nov 2025', title:'YouTube', text:'Started a channel. 28 videos so far, Tasker tutorials that send viewers to MationX, and every one of them earns.', wall:'YOUTUBE', note:'28 VIDEOS' },
+  { date:'Feb 2026', title:'Emancipated at 16', text:'A court in Semily granted me full legal capacity. I had to prove I could support myself and knew how taxes and the paperwork work.', wall:'EMANCIPATED', note:'AT 16', photo:'court' },
   { date:'May 2026', title:'MationX Studio', text:'Launched the SaaS where every flow on this wall gets built.', wall:'MATIONX\nSTUDIO' },
+  { date:'Jun 2026', title:'Self-employed', text:'Registered my own business, still sixteen.', wall:'SELF-\nEMPLOYED', note:'AT 16' },
   { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:'2ND\nPLACE', note:'OF 80' },
   { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', wall:'500+\nPHONES' }
 ];
@@ -2377,7 +2397,7 @@ const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts 
 const tlList = document.querySelector('.tl-list'), tlEl = document.querySelector('.tl');
 tlList.innerHTML = MILESTONES.map(m => `<li><span class="tl-date">${m.date}</span><span class="tl-title">${m.title}</span><span class="tl-text">${m.text}</span></li>`).join('');
 document.getElementById('c6').style.setProperty('--len', 160 + MILESTONES.length*45);
-const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; return { li, wall: [m.wall, m.note || '', m.date.toUpperCase()] }; });
+const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; return { li, wall: [m.wall, m.note || '', m.date.toUpperCase(), m.photo] }; });
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
   const k = Math.max(0, Math.min(ROAD.length-1, Math.floor((st - ROAD_ST)*ROAD.length)));
@@ -2592,6 +2612,7 @@ const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so t
 // textures the opening needs get the connection to themselves
 let reelLoading = false;
 function loadReelMedia(){ if (reelLoading) return; reelLoading = true;
+{ const im = new Image(); im.onload = () => { BOARD_PHOTOS.court = grade(im, 0); roadK = -1; }; im.src = '/media/court.jpg'; }
 ['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
 }
 let videoOn = false;
