@@ -805,7 +805,12 @@ const soundRings = [0,1,2].map(() => {
 
 // ---------- Wear Close bracelets (C3: a leather strap with a pin-and-hole fastening, see bracelet.js) ----------
 const BS = 1.3; // bracelets read better a touch larger than life next to the phone
-function makeBracelet(isStone){ const b = makeStrap(isStone, envTex); b.g.rotation.x = .42; b.g.scale.setScalar(BS); return b; }
+// two pieces of leather, not two copies: different wrists, bends, done up on different holes. Stone faces you with its
+// node (the phone taps it); Charcoal is turned round so its fastening shows: keeper, the stud through a hole, the holes.
+const STONE_SHAPE = { RX: .29, RZ: .228, seed: 3, OV: .9, holes: 3, studAt: .34, keeperAt: .12 };
+const CHAR_SHAPE = { RX: .31, RZ: .243, seed: 8, OV: 1.12, holes: 4, studAt: .4, keeperAt: .15 };
+const STONE_RY = -.3, CHAR_RY = 2.55;
+function makeBracelet(isStone){ const b = makeStrap(isStone, envTex, isStone ? STONE_SHAPE : CHAR_SHAPE); b.g.rotation.set(.42, isStone ? STONE_RY : CHAR_RY, 0); b.g.scale.setScalar(BS); return b; }
 const stone = makeBracelet(true), charcoal = makeBracelet(false);
 stage.add(stone.g, charcoal.g);
 const STONE_AT = new THREE.Vector3(-.02,-.46,.12), CHAR_AT = new THREE.Vector3(.95,.16,-.4);
@@ -1652,10 +1657,10 @@ function updateStage(st, now){
   stone.g.visible = charcoal.g.visible = bVis > .002;
   if (stone.g.visible){
     stone.g.position.copy(STONE_AT).add(new THREE.Vector3(0, (1-bIn)*-2.4 - bOut*2.6 + (reduced?0:Math.sin(t*.9)*.02), 0));
-    stone.g.rotation.y = (1-bIn)*-2.2 + (reduced?0:Math.sin(t*.5)*.06);
+    stone.g.rotation.y = STONE_RY + (1-bIn)*-2.2 + (reduced?0:Math.sin(t*.5)*.06);
     const cIn = smooth(5.45, 6.05, st);
     charcoal.g.position.copy(CHAR_AT).add(new THREE.Vector3(0, (1-cIn)*-2.6 - bOut*2.6 + (reduced?0:Math.sin(t*.9+1.7)*.02), 0));
-    charcoal.g.rotation.y = (1-cIn)*2.4 + (reduced?0:Math.sin(t*.5+1)*.06);
+    charcoal.g.rotation.y = CHAR_RY + (1-cIn)*2.4 + (reduced?0:Math.sin(t*.5+1)*.06);
     const sinceArr = (now - fx.arriveT)/1000;
     if (st >= ARRIVE && sinceArr < .6 && !reduced){ const j = (1-sinceArr/.6)*.012; charcoal.g.position.x += (Math.random()-.5)*j; charcoal.g.position.y += (Math.random()-.5)*j; }
     const glow = st >= ARRIVE ? .35 + .65*Math.exp(-Math.max(0,sinceArr)*2.2) : 0;

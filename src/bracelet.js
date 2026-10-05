@@ -98,8 +98,12 @@ function sweep(frames, { closed = false, cs = 5, face = new THREE.Color(1,1,1), 
 
 // ---------- the bracelet ----------
 export const STRAP = { RX: .3, RZ: .235, W: .092, T: .022, NODE: .16, NODE_D: .05 };
-export function makeStrap(stone, envTex){
-  const { RX, RZ, W, T, NODE, NODE_D } = STRAP;
+// shape: each bracelet is its own piece of leather: its wrist (RX, RZ), its bends (seed), how far the tail runs past the
+// stud (OV, which hole it's done up on), how many holes show
+export function makeStrap(stone, envTex, shape = {}){
+  const { W, T, NODE, NODE_D } = STRAP;
+  const RX = shape.RX ?? STRAP.RX, RZ = shape.RZ ?? STRAP.RZ, OV = shape.OV ?? .95, HOLES = shape.holes ?? 3, STUD = shape.studAt ?? .36, KEEP = shape.keeperAt ?? .13;
+  let sd = (shape.seed ?? 1)*7919 % 233280; const rnd = () => { sd = (sd*9301 + 49297) % 233280; return sd/233280; };
   const g = new THREE.Group();
   const grain = leatherGrain();
   const leather = new THREE.MeshPhysicalMaterial({
@@ -111,19 +115,24 @@ export function makeStrap(stone, envTex){
   const face = new THREE.Color(stone ? 0xcdbba4 : 0x353331), edgeC = new THREE.Color(stone ? 0xa8937b : 0x1d1c1b);
   // metal: champagne rose gold for Stone, gunmetal for Charcoal
   const bezM = new THREE.MeshStandardMaterial({ color: stone ? 0xd8b08c : 0x3a3a3e, metalness: 1, roughness: stone ? .24 : .32, envMap: envTex, envMapIntensity: .85, emissive: 0x000000 });
+  const studM = bezM.clone(); // the same metal, but it doesn't light up with the node when a pulse lands
   // the node's face: frosted ceramic, cream or charcoal
   const capM = new THREE.MeshPhysicalMaterial({ color: stone ? 0xd9ccb9 : 0x232325, roughness: .6, metalness: 0, sheen: .25, sheenRoughness: .7, sheenColor: new THREE.Color(stone ? 0xffffff : 0x55555a), envMap: envTex, envMapIntensity: .55 });
 
-  // the wrist's oval, never quite perfect, flattened where the rigid node sits on it
-  const wob = a => 1 + .012*Math.sin(3*a + 1.3) + .008*Math.sin(5*a + .4);
+  // the wrist's oval, never quite perfect and never in one plane (worn leather keeps its own bends, different on each
+  // bracelet), flattened where the rigid node sits on it. Every term repeats once per turn, so the tail stays on the start.
+  const ph = [0, 0, 0, 0, 0].map(() => rnd()*Math.PI*2), amp = [.008 + .01*rnd(), .005 + .007*rnd(), .006 + .009*rnd()];
+  const wob = a => 1 + amp[0]*Math.sin(3*a + ph[0]) + amp[1]*Math.sin(5*a + ph[1]) + amp[2]*Math.sin(2*a + ph[2]);
+  const wA = .004 + .006*rnd(), wB = .002 + .004*rnd();
+  const warp = a => wA*Math.sin(2*a + ph[3]) + wB*Math.sin(3*a + ph[4]);
   const zFront = RZ*wob(Math.PI/2);
   const pathAt = (a, out) => {
-    const k = wob(a); out.set(RX*k*Math.cos(a), 0, RZ*k*Math.sin(a));
+    const k = wob(a); out.set(RX*k*Math.cos(a), warp(a), RZ*k*Math.sin(a));
     if (out.z > 0){ const f = 1 - smooth(NODE*.42, NODE*.78, Math.abs(out.x)); out.z = THREE.MathUtils.lerp(out.z, zFront, f); }
     return out;
   };
   // the strap: from its start at the back (under), all the way round, and over its own start as the tail
-  const OV = .95, A0 = -Math.PI/2 - .45, A1 = A0 + Math.PI*2 + OV;
+  const A0 = -Math.PI/2 - .45, A1 = A0 + Math.PI*2 + OV;
   const tipLen = (W/2)/((RX + RZ)/2); // a semicircular tip, in angle
   const lift = a => T*1.04*smooth(A0 + Math.PI*2 - .32, A0 + Math.PI*2 - .03, a);
   const N = 900, frames = [], p0 = new THREE.Vector3(), p1 = new THREE.Vector3();
@@ -146,7 +155,7 @@ export function makeStrap(stone, envTex){
 
   // keeper loop: a short band of the same leather wrapped round both layers
   {
-    const ak = A0 + .13, f = frameAt(ak, 0), up = new THREE.Vector3(0, 1, 0);
+    const ak = A0 + KEEP, f = frameAt(ak, 0), up = new THREE.Vector3(0, 1, 0);
     const hx = T*1.04 + T/2 + .007, hn = -T/2 - .005, hy = W/2 + .007; // spans from under the base to over the tail
     const kf = [], KN = 64; let ku = 0, kp = null;
     const outC = (hx + hn)/2, outH = (hx - hn)/2, rC = .012;
@@ -166,15 +175,17 @@ export function makeStrap(stone, envTex){
   const surf = (a, extra = 0) => { const f = frameAt(a); return { p: f.c.clone().addScaledVector(f.o, T/2 + extra), o: f.o }; };
   const tailA = a => a + Math.PI*2; // the tail runs over the start, one turn later
   {
-    const { p, o } = surf(tailA(A0 + .36));
-    const stud = new THREE.Mesh(new THREE.SphereGeometry(.017, 28, 14, 0, Math.PI*2, 0, Math.PI/2), bezM);
+    const { p, o } = surf(tailA(A0 + STUD));
+    const stud = new THREE.Mesh(new THREE.SphereGeometry(.017, 28, 14, 0, Math.PI*2, 0, Math.PI/2), studM);
     stud.scale.set(1, .62, 1); stud.position.copy(p); stud.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), o); g.add(stud);
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(.0175, .0028, 10, 32), bezM);
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(.0175, .0028, 10, 32), studM);
     collar.position.copy(p); collar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), o); g.add(collar);
   }
   const holeM = new THREE.MeshStandardMaterial({ color: stone ? 0x4a3f34 : 0x0b0b0b, roughness: 1, metalness: 0 });
   const rimM = new THREE.MeshStandardMaterial({ color: edgeC, roughness: .7, metalness: 0 });
-  for (const da of [.53, .66, .79]){
+  for (let k = 1; k <= HOLES; k++){
+    const da = STUD + .13*k;
+    if (da > OV - tipLen - .03) break; // never punched into the rounded tip
     const { p, o } = surf(tailA(A0 + da), .0006);
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), o);
     const hole = new THREE.Mesh(new THREE.CircleGeometry(.0105, 24), holeM); hole.position.copy(p); hole.quaternion.copy(q); g.add(hole);
@@ -185,7 +196,7 @@ export function makeStrap(stone, envTex){
   const node = new THREE.Group();
   node.add(new THREE.Mesh(slab(NODE, NODE, NODE_D, .048, .01), bezM));
   const cap = new THREE.Mesh(slab(NODE - .022, NODE - .022, .012, .038, .005), [capM, capM]); cap.position.z = NODE_D/2 - .004; node.add(cap);
-  node.position.set(0, 0, zFront + T/2 + NODE_D/2 - .003);
+  node.position.set(0, warp(Math.PI/2), zFront + T/2 + NODE_D/2 - .003);
   g.add(node);
   return { g, node, bezM, capM };
 }
