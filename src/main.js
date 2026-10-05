@@ -1946,7 +1946,9 @@ composer.addPass(new OutputPass());
 
 // ---------- "Still human": Petr's head, in dots (see head.js) ----------
 // The wall dims and his head assembles beside the closing copy, turning a little with the cursor.
-const HEAD_ST = 17.35; // story time it starts assembling (the move into the last chapter)
+// it assembles during the move into the last chapter (st 17 → 18 is one even screen of scroll) and is whole by the
+// time the chapter pins; the chapter's own hold is short, so nothing may be left to happen there
+const HEAD_ST = 17.12, HEAD_DUR = .82;
 const headRig = new THREE.Group(); camera.add(headRig);
 let head = null;
 createHead().then(h => { head = h; h.uniforms.uColor.value.multiplyScalar(1.12); // just under the bloom threshold: only the brightest bits glow
@@ -1958,7 +1960,7 @@ function placeHead(){
 }
 function updateHead(st, t){
   if (!head) return 0;
-  const k = reduced ? (st > HEAD_ST ? 1 : 0) : clamp01((st - HEAD_ST)/.75);
+  const k = reduced ? (st > HEAD_ST ? 1 : 0) : clamp01((st - HEAD_ST)/HEAD_DUR);
   head.group.visible = k > 0;
   if (!k) return 0;
   const u = head.uniforms;

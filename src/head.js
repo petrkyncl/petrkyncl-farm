@@ -33,7 +33,8 @@ export async function createHead(url = '/media/head.bin', { spacing = .0052 } = 
       void main(){
         vec3 p = position;
         // assembling: each dot comes in from a scatter along its own direction, the far ones last
-        float k = clamp(uIn*1.6 - aSeed*.6, 0.0, 1.0); k = k*k*(3.0 - 2.0*k);
+        // each dot's flight is a third of the whole, starting at its own moment, so dots keep arriving at an even rate
+        float k = clamp((uIn - aSeed*.66)/.34, 0.0, 1.0); k = 1.0 - (1.0 - k)*(1.0 - k);
         vec3 scatter = vec3(hash(aSeed*7.0) - .5, hash(aSeed*13.0) - .5, hash(aSeed*3.0)*.8) * .9;
         p = mix(p + scatter, p, k);
         // a breath of movement, never still
