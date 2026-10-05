@@ -258,8 +258,8 @@ export function outlineGeometry(w, h, r, t){
 
 // The real thing: a 3D-scanned-quality iPhone 17 Pro Max (glTF, metres, back facing +z).
 // Returns it scaled to scene units with the screen facing +z, plus its materials by name.
-export function loadIphone(url, envTex){
-  const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+export function loadIphone(url, envTex, manager){
+  const loader = new GLTFLoader(manager); loader.setMeshoptDecoder(MeshoptDecoder);
   return new Promise((ok, fail) => loader.load(url, gltf => {
     const model = gltf.scene;
     model.scale.setScalar(10); model.rotation.y = Math.PI;

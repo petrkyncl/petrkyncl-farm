@@ -6,3 +6,4 @@ finishes-preview.png
 
 # raw scans stay local; only the derived dots ship
 public/models/_*
+tools/_*

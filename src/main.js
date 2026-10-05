@@ -33,7 +33,9 @@ const shiftName = h => h<5 ? 'Night shift' : h<11 ? 'Morning' : h<17 ? 'Day shif
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(2, devicePixelRatio||1));
+// phones and tablets: a lower pixel ratio (their GPUs fill far fewer pixels per frame than a laptop's)
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+renderer.setPixelRatio(Math.min(TOUCH ? 1.5 : 2, devicePixelRatio||1));
 renderer.toneMapping = THREE.NeutralToneMapping;
 const scene = new THREE.Scene();
 const room = new THREE.Color('#06070a');
@@ -80,7 +82,8 @@ for (let r=0;r<R;r++) for (let c=0;c<C;c++){
 
 // ---------- textures for video-wall mode ----------
 const WALL_ASPECT = (C*SX)/(R*SY);
-function wallCanvas(){ const c=document.createElement('canvas'); c.height=1024; c.width=Math.round(1024*WALL_ASPECT); const g=c.getContext('2d'); g.fillStyle='#000'; g.fillRect(0,0,c.width,c.height); return [c,g]; }
+const WALL_TEX_H = innerWidth >= innerHeight ? 1024 : 640; // a tall wall is only 12 × 14 phones; every reel frame is uploaded
+function wallCanvas(){ const c=document.createElement('canvas'); c.height=WALL_TEX_H; c.width=Math.round(WALL_TEX_H*WALL_ASPECT); const g=c.getContext('2d'); g.fillStyle='#000'; g.fillRect(0,0,c.width,c.height); return [c,g]; }
 const [nameC, nameG] = wallCanvas();
 const [faceC, faceG] = wallCanvas();
 const [faceC2, faceG2] = wallCanvas(); // the next reel item, for the flip from one photo to the next
@@ -812,10 +815,14 @@ let ui = UI.getContext('2d');
 const UI_CTX = ui;
 const uiTex = new THREE.CanvasTexture(UI); uiTex.colorSpace = THREE.SRGBColorSpace; uiTex.anisotropy = 8;
 ph.display.material.map = uiTex; ph.display.material.needsUpdate = true;
-const rc = createCard(studioEnv), card = rc.card; phone.add(card);
+const rc = createCard(studioEnv), card = rc.card; phone.add(card); if (TOUCH) lightenMaterials(card);
 // swap the hand-built phone for the real model as soon as it loads; the procedural one stays as a fallback
-loadIphone('/models/iphone-17-pro-max.glb', envTex).then(({ model, mats }) => {
+// the iPhone isn't on screen until the reader scrolls off the desk, so it loads after the opening is up (with its own
+// loading manager, so the loader doesn't wait for it); the hand-built phone stands in if anyone gets there first
+const iphoneReady = new Promise(res => { window.__startIphone = res; });
+iphoneReady.then(() => loadIphone('/models/iphone-17-pro-max.glb', envTex, new THREE.LoadingManager())).then(({ model, mats }) => {
   paint(mats, DEEP_BLUE_NIGHT);
+  if (TOUCH) lightenMaterials(model);
   Object.values(mats).forEach(mt => { if (mt.name !== 'OLED') clampHDR(mt, 2.2); }); // no fireflies off the rails and lenses
   const keep = new Set([card]);
   phone.children.forEach(c => { if (!keep.has(c) && !soundRings.includes(c)) c.visible = false; });
@@ -898,7 +905,16 @@ const BS = 1.3; // bracelets read better a touch larger than life next to the ph
 const STONE_SHAPE = { RX: .29, RZ: .226, seed: 3, OV: 1.12, holes: 3, studAt: .34, keeperAt: .12, startA: -.25 };
 const CHAR_SHAPE = { RX: .312, RZ: .246, seed: 8, OV: 1.2, holes: 4, studAt: .38, keeperAt: .14, startA: 2.2 };
 const STONE_RY = -.3, CHAR_RY = .26;
-function makeBracelet(isStone){ const b = makeStrap(isStone, envTex, isStone ? STONE_SHAPE : CHAR_SHAPE); b.g.rotation.set(isStone ? .42 : .5, isStone ? STONE_RY : CHAR_RY, isStone ? .04 : -.07); b.g.scale.setScalar(BS); return b; }
+// phones: clearcoat and sheen cost a lot per pixel, standard materials look nearly the same at that size
+// (the materials stay the same objects, so later tweaks and shader hooks still apply: with clearcoat and sheen at 0,
+// three.js compiles them without those layers)
+function lightenMaterials(root){
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    [].concat(o.material).forEach(m => { if (m?.isMeshPhysicalMaterial){ m.clearcoat = 0; m.sheen = 0; m.iridescence = 0; m.needsUpdate = true; } });
+  });
+}
+function makeBracelet(isStone){ const b = makeStrap(isStone, envTex, isStone ? STONE_SHAPE : CHAR_SHAPE); if (TOUCH) lightenMaterials(b.g); b.g.rotation.set(isStone ? .42 : .5, isStone ? STONE_RY : CHAR_RY, isStone ? .04 : -.07); b.g.scale.setScalar(BS); return b; }
 const stone = makeBracelet(true), charcoal = makeBracelet(false);
 stage.add(stone.g, charcoal.g);
 const STONE_AT = new THREE.Vector3(-.02,-.46,.12), CHAR_AT = new THREE.Vector3(.95,.16,-.4);
@@ -1361,7 +1377,7 @@ function drawInternat(p, t){
 }
 // ---------- Wear Close, the real flow ----------
 // You're on the home screen, you bring the phone to your bracelet, iOS reads its NFC tag in the background and offers
-// "Open in Wear Close". Tap it, and the app opens on Zuzka: send a pulse, with a photo and a note if you like. It
+// "Open in Wear Close". Tap it, and the app opens on Zuzka: press the heart to send a pulse. It
 // lands on her bracelet's phone, and the moment is kept in Memories (with her pulses, a capsule she left, milestones).
 const WC = { cream:'#f4eee4', ink:'#1b1714', stone:'#6e645b', mute:'#a39889', line:'#e3d9cb', pulse:'#c4473c', shell:'#ebe2d4' };
 // the photo that goes with the pulse: a sunset over water (no faces; it's somebody's evening, not a stock person)
@@ -1388,6 +1404,7 @@ function wcIcon(kind, x, y, s, col){
 function wcThumb(x, y, w, r){ ui.save(); rr(x, y, w, w, r); ui.clip(); ui.drawImage(WC_PHOTO, x, y, w, w); ui.restore(); }
 // the send screen. p: 0 opened → attach a photo → write a note → send → it travels → delivered
 function drawWear(p, t){
+  // the send screen, just the pulse: Zuzka, the heart; a press on it at p .52, it travels from .64, she feels it at .86
   const g = ui, M = 30, W = UW - 2*M;
   g.fillStyle = WC.cream; g.fillRect(0, 0, UW, UH);
   statusBar(false, 0);
@@ -1395,53 +1412,18 @@ function drawWear(p, t){
   wcMark(g, UW/2, 116, 18);
   g.fillStyle = WC.ink; g.font = `300 84px ${SERIF}`; g.fillText('Zuzka', UW/2, 206);
   g.fillStyle = WC.stone; g.font = `400 21px ${SF}`; g.fillText('286 km away · 412 days together', UW/2, 262);
-  // the pulse
-  const cx = UW/2, cy = 500, sendK = smooth(.6, .64, p), sending = p > .64 && p < .86, done = smooth(.84, .9, p);
-  if (sending){ const k = (t*1.3) % 1; for (let i = 0; i < 3; i++){ const kk = (k + i/3) % 1; g.strokeStyle = `rgba(196,71,60,${(1 - kk)*.5})`; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 140 + kk*120, 0, Math.PI*2); g.stroke(); } }
-  g.strokeStyle = WC.ink; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 150, 0, Math.PI*2); g.stroke();
-  const beat = sending ? 1 + .06*Math.max(0, Math.sin(t*8)) : 1;
-  g.fillStyle = done > 0 ? WC.pulse : WC.shell; g.beginPath(); g.arc(cx, cy, 116*beat, 0, Math.PI*2); g.fill();
-  g.fillStyle = done > 0 ? '#fff' : WC.pulse; heart2d(g, cx, cy + 8, 50*beat);
-  g.fillStyle = WC.ink; g.font = `400 24px ${SF}`;
-  g.fillText(done > 0 ? 'Zuzka felt it.' : sending ? 'Sending your pulse…' : 'Send Zuzka a pulse', cx, 700);
-  // what can go with it
-  const chips = [['mood', 'Mood'], ['photo', 'Photo'], ['note', 'Note'], ['voice', 'Voice']], cw = (W - 3*12)/4;
-  const pressPhoto = smooth(.1, .13, p)*(1 - smooth(.16, .19, p)), pressNote = smooth(.32, .35, p)*(1 - smooth(.38, .41, p));
-  chips.forEach(([k, lb], i) => {
-    const x = M + i*(cw + 12), y = 760, on = (k === 'photo' && p > .14) || (k === 'note' && p > .36), pr = k === 'photo' ? pressPhoto : k === 'note' ? pressNote : 0;
-    g.save(); g.translate(x + cw/2, y + 52); g.scale(1 - .06*pr, 1 - .06*pr); g.translate(-(x + cw/2), -(y + 52));
-    g.fillStyle = on ? WC.ink : '#fff'; rr(x, y, cw, 104, 26); g.fill();
-    if (!on){ g.strokeStyle = WC.line; g.lineWidth = 1.5; rr(x, y, cw, 104, 26); g.stroke(); }
-    wcIcon(k, x + cw/2, y + 40, 34, on ? '#fff' : WC.ink);
-    g.fillStyle = on ? '#fff' : WC.stone; g.font = `500 18px ${SF}`; g.fillText(lb, x + cw/2, y + 80);
-    g.restore();
-  });
-  // attached: the photo, then the note being written
-  const ph = smooth(.16, .26, p), noteN = Math.floor(clamp01((p - .4)/.14)*WC_NOTE.length);
-  if (ph > 0){
-    g.globalAlpha = ph; const y = 900 + (1 - ph)*20;
-    wcThumb(M, y, 108, 20);
-    if (p > .36){
-      g.fillStyle = '#fff'; rr(M + 124, y, W - 124, 108, 20); g.fill(); g.strokeStyle = WC.line; g.lineWidth = 1.5; rr(M + 124, y, W - 124, 108, 20); g.stroke();
-      g.textAlign = 'left'; g.fillStyle = noteN ? WC.ink : WC.mute; g.font = `400 23px ${SF}`;
-      const txt = noteN ? WC_NOTE.slice(0, noteN) : 'Add a note'; g.fillText(txt, M + 148, y + 54);
-      if (p < .6 && Math.floor(t*2) % 2 === 0){ g.fillStyle = WC.pulse; g.fillRect(M + 148 + g.measureText(noteN ? txt : '').width + 3, y + 38, 2.5, 32); }
-      g.textAlign = 'center';
-    }
-    g.globalAlpha = 1;
-  }
-  // send
-  const by = 1100, bw = W;
-  if (p < .64){
-    g.save(); g.translate(UW/2, by + 42); g.scale(1 - .04*sendK*(1 - smooth(.62, .64, p)), 1 - .04*sendK*(1 - smooth(.62, .64, p)));
-    g.fillStyle = WC.ink; rr(-bw/2, -42, bw, 84, 42); g.fill();
-    g.fillStyle = '#fff'; heart2d(g, -78, 4, 15); g.font = `600 23px ${SF}`; g.fillText('Send pulse', 14, 1);
-    g.restore();
-  } else {
-    // quiet confirmation in the app's ink; the brand's red is only for the heartbeat itself
-    g.fillStyle = WC.stone; g.font = `500 20px ${SF}`;
-    g.fillText(done > 0 ? 'Delivered with a photo and a note' : 'On its way to Zuzka', UW/2, by + 42);
-  }
+  const cx = UW/2, cy = 600, press = smooth(.5, .54, p)*(1 - smooth(.58, .63, p)), sending = p > .64 && p < .86, done = smooth(.84, .9, p);
+  // idle: the heart breathes, inviting a press
+  const idle = p < .5 ? .5 + .5*Math.sin(t*2.2) : 0;
+  if (sending){ const k = (t*1.3) % 1; for (let i = 0; i < 3; i++){ const kk = (k + i/3) % 1; g.strokeStyle = `rgba(196,71,60,${(1 - kk)*.5})`; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, 170 + kk*140, 0, Math.PI*2); g.stroke(); } }
+  g.strokeStyle = `rgba(27,23,20,${.18 + .12*idle})`; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 182 + 6*idle, 0, Math.PI*2); g.stroke();
+  const beat = (sending ? 1 + .06*Math.max(0, Math.sin(t*8)) : 1)*(1 - .07*press);
+  g.fillStyle = done > 0 ? WC.pulse : WC.shell; g.beginPath(); g.arc(cx, cy, 146*beat, 0, Math.PI*2); g.fill();
+  g.fillStyle = done > 0 ? '#fff' : WC.pulse; heart2d(g, cx, cy + 10, 62*beat);
+  g.fillStyle = WC.ink; g.font = `400 26px ${SF}`;
+  g.fillText(done > 0 ? 'Zuzka felt it.' : sending ? 'Sending your pulse…' : 'Press to send Zuzka a pulse', cx, 870);
+  g.fillStyle = WC.stone; g.font = `400 20px ${SF}`;
+  g.fillText(done > 0 ? 'Her bracelet lit up just now' : sending ? 'On its way to her bracelet' : 'She’ll feel it on her bracelet', cx, 912);
   g.textAlign = 'left';
 }
 // Memories: the relationship as it builds up from the bracelets. q: 0 pushed in from the send screen → today's entry lands
@@ -1466,7 +1448,7 @@ function drawMemories(q, t){
   const tile = (bg, icon, col) => (x, y) => { g.fillStyle = bg; rr(x, y, 76, 76, 18); g.fill(); if (icon === 'heart'){ g.fillStyle = col; heart2d(g, x + 38, y + 42, 18); } else wcIcon(icon, x + 38, y + 38, 34, col); };
   let y = 300;
   label('TODAY', y);
-  if (land > 0){ g.save(); g.globalAlpha = Math.min(1, land); g.translate(0, (1 - land)*-28); card(y + 24, (x, yy) => wcThumb(x, yy, 76, 18), 'You sent a pulse', `“${WC_NOTE}” · with a photo`, '18:42'); g.restore(); }
+  if (land > 0){ g.save(); g.globalAlpha = Math.min(1, land); g.translate(0, (1 - land)*-28); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'You sent a pulse', 'She felt it right away', '18:42'); g.restore(); }
   y += drop + 40;
   label('YESTERDAY', y); card(y + 24, tile('#f6dcd7', 'heart', WC.pulse), 'Zuzka sent a pulse', 'You were at work', '21:07');
   y += 176;
@@ -1633,7 +1615,7 @@ function renderUI(kind, p, now){
   if (kind === 'call' && kindSeen !== 'call') callT0 = now;
   kindSeen = kind;
   const t = now/1000, secs = Math.floor((now - callT0)/1000);
-  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='ring' ? `r${Math.round(p*240)}` : kind==='homeIdle' ? `hi` : kind==='nfc' ? `n${Math.round(p*200)}` : kind==='wear' ? `w${Math.round(p*300)}${Math.floor(t*12)}` : kind==='memories' ? `m${Math.round(p*200)}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*24)}` : kind==='ask' ? `a${Math.round(p*120)}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*30):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*160)}` : kind==='internat' ? `i${Math.round(p*300)}` : `t${Math.round(p*200)}`;
+  const k = kind==='off' ? 'off' : kind==='idle' ? `idle${hhmm(clock.shown)}` : kind==='ring' ? `r${Math.round(p*240)}` : kind==='homeIdle' ? `hi` : kind==='nfc' ? `n${Math.round(p*200)}` : kind==='wear' ? `w${Math.round(p*(TOUCH ? 150 : 300))}${Math.floor(t*(TOUCH ? 6 : 12))}` : kind==='memories' ? `m${Math.round(p*(TOUCH ? 80 : 200))}` : kind==='call' ? `c${Math.round(p*20)}${secs}${Math.floor(t*(TOUCH ? 10 : 24))}` : kind==='ask' ? `a${Math.round(p*(TOUCH ? 60 : 120))}${Math.floor(t*2)}` : kind==='pulse' ? `p${p}${p===1?Math.floor(t*(TOUCH ? 12 : 30)):0}` : kind.startsWith('home') ? `${kind}${Math.round(p*(TOUCH ? 70 : 160))}` : kind==='internat' ? `i${Math.round(p*(TOUCH ? 120 : 300))}` : `t${Math.round(p*(TOUCH ? 70 : 200))}`;
   const kk = k + hhmm(clock.shown);
   if (kk === uiKey) return;
   uiKey = kk;
@@ -1677,9 +1659,8 @@ function drawNotif(){
   wcMark(nc, 86, 98, 47);
   nc.fillStyle = '#7d776c'; nc.font = `600 22px ${SF}`; nc.letterSpacing = '4px'; nc.textBaseline = 'middle';
   nc.fillText('WEAR CLOSE', 170, 70); nc.letterSpacing = '0px';
-  nc.textAlign = 'right'; nc.font = `400 22px ${SF}`; nc.fillText('now', 572, 70); nc.textAlign = 'left';
+  nc.textAlign = 'right'; nc.font = `400 22px ${SF}`; nc.fillText('now', 680, 70); nc.textAlign = 'left';
   nc.fillStyle = '#1b1a18'; nc.font = `600 32px ${SF}`; nc.fillText('Petr is thinking about you.', 170, 126);
-  nc.save(); nc.beginPath(); nc.roundRect(596, 50, 96, 96, 18); nc.clip(); nc.drawImage(WC_PHOTO, 596, 50, 96, 96); nc.restore(); // it came with a photo
   notifTex.needsUpdate = true;
 }
 
@@ -1691,6 +1672,7 @@ const TAP_POS = STONE_NODE.clone().add(new THREE.Vector3(-.06, .5, .2)).toArray(
 const WC_USE_POS = [-.78, .34, .55], WC_USE_ROT = [-.1, .26, .05], WC_USE_S = .78;
 // lying back-up, long edge to the camera, close in: the card next to the camera plateau, like Ruune shows it
 // close enough that the 1.3 mm difference reads: frame the stretch from the lenses to the card's top edge
+const AXIS_X = new THREE.Vector3(1, 0, 0);
 const PROFILE_S = 4.4, PROFILE_ROT = [Math.PI/2, 0, Math.PI/2], PROFILE_POS = [.91, .04 - PD/2*PROFILE_S, .3];
 const PHONE_KEYS = [
   // it leaves the wall of phones far behind and flies to the viewer, turning once on the way
@@ -1852,7 +1834,11 @@ function updateStage(st, now){
   // on phones the stage is centred, so slide the lens-to-card stretch of the profile to the middle of the screen
   if (isStacked()){
     // on a phone: frame the profile wider (both callouts have to fit the narrow screen) and centre the lens-to-card stretch
+    // the stage sits above the screen's centre on a phone, so the camera looks up at the profile; turn the phone by
+    // exactly that angle so it's still dead side-on, and it stays above the copy
     phone.scale.multiplyScalar(1 - .42*still); phone.position.x += -.08*still;
+    const yc = stage.position.y + stage.scale.y*phone.position.y, zc = stage.position.z + stage.scale.z*phone.position.z;
+    phone.quaternion.premultiply(tmpQ.setFromAxisAngle(AXIS_X, Math.atan2(yc, -zc)*still));
     // and when its screen is the point (the transcript, Ask, Internát), the phone comes up bigger so it can be read
     const read = smooth(4.72, 4.8, st)*(1 - smooth(5.03, 5.1, st)) + smooth(7.42, 7.56, st)*(1 - smooth(8.96, 9.06, st));
     phone.scale.multiplyScalar(1 + .45*read); phone.position.y += .1*read;
@@ -1983,7 +1969,7 @@ const flashEl = document.getElementById('flash');
 // ---------- post ----------
 // the composer renders into a multisampled target: without it the post chain drops the canvas's antialiasing
 // and long edges (the desk, phone rims) step visibly
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: TOUCH ? 2 : 4 }));
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .9);
 composer.addPass(bloom);
@@ -1996,14 +1982,18 @@ composer.addPass(new OutputPass());
 const HEAD_ST = 17.12, HEAD_DUR = .82;
 const headRig = new THREE.Group(); camera.add(headRig);
 let head = null;
+let headLoading = false;
+function loadHead(){ if (headLoading) return; headLoading = true;
 createHead().then(h => { head = h; h.uniforms.uColor.value.multiplyScalar(1.12); // just under the bloom threshold: only the brightest bits glow
   headRig.add(h.group); h.group.visible = false; placeHead(); }).catch(e => console.warn('head', e));
+}
 function placeHead(){
   const d = 3, halfH = d*Math.tan(THREE.MathUtils.degToRad(20)), halfW = halfH*camera.aspect;
   if (isStacked()){ headRig.position.set(0, halfH*.66, -d); headRig.scale.setScalar(.6); } // above the copy, clear of the title
   else { headRig.position.set(halfW*.38, .02, -d); headRig.scale.setScalar(1.3); }
 }
 function updateHead(st, t){
+  if (st > HEAD_ST - 3) loadHead(); // fetched a couple of chapters ahead, not with the first paint
   if (!head) return 0;
   const k = reduced ? (st > HEAD_ST ? 1 : 0) : clamp01((st - HEAD_ST)/HEAD_DUR);
   head.group.visible = k > 0;
@@ -2016,10 +2006,22 @@ function updateHead(st, t){
   head.group.rotation.set(-pmy*.12, -.6 - (1 - k)*.9 + pmx*.4 + Math.sin(t*.3)*.05, 0);
   return k;
 }
+// phones: the resolution adapts to what the GPU manages (a heavy scene steps it down, a calm one brings it back up)
+const PR_MAX = Math.min(TOUCH ? 1.5 : 2, devicePixelRatio || 1), PR_MIN = Math.min(1, PR_MAX);
+let prNow = PR_MAX, dtEma = 16.7, prT = 0;
+function adaptResolution(dtMs, now){
+  if (!TOUCH) return;
+  dtEma += (dtMs - dtEma)*.05;
+  if (now - prT < 900) return;
+  let want = prNow;
+  if (dtEma > 21 && prNow > PR_MIN + .01) want = Math.max(PR_MIN, prNow - .15);
+  else if (dtEma < 17.6 && prNow < PR_MAX - .01 && now - prT > 3000) want = Math.min(PR_MAX, prNow + .1);
+  if (want !== prNow){ prNow = want; prT = now; renderer.setPixelRatio(prNow); composer.setPixelRatio(prNow); size(); }
+}
 function size(){
   renderer.setSize(innerWidth, innerHeight, false);
   composer.setSize(innerWidth, innerHeight);
-  bloom.setSize(innerWidth*.5, innerHeight*.5);
+  bloom.setSize(innerWidth*(TOUCH ? .3 : .5), innerHeight*(TOUCH ? .3 : .5));
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   placeStage(); placeHead();
 }
@@ -2157,8 +2159,8 @@ const PACE = [
     [6.0, 6.24, 40],    // on the home screen, the phone goes to the bracelet
     [6.24, 6.34, 45],   // the tag is read: "Open in Wear Close"
     [6.34, 6.46, 40],   // tapped, the app opens on Zuzka
-    [6.46, 6.62, 60],   // a photo goes with it
-    [6.62, 6.76, 60],   // and a note
+    [6.46, 6.62, 30],   // the app on Zuzka
+    [6.62, 6.76, 30],   // a press on the heart
     [6.76, 6.92, 55],   // send: the pulse travels to her
     [6.92, 7.0, 45],    // she felt it
     [7.0, 7.36, 90]     // Memories: today's moment lands on top of the rest
@@ -2328,7 +2330,7 @@ addEventListener('pointermove', e => {
   cross.style.transform = `translate(${e.clientX}px,${e.clientY}px)`;
 }, {passive:true});
 document.addEventListener('mouseleave', () => ndc.set(9,9));
-addEventListener('pointerdown', e => { if (e.pointerType!=='mouse'){ ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1); tapUntil = performance.now()+2200; } }, {passive:true});
+// touch: no tap-to-highlight; a finger on the wall is almost always someone scrolling
 
 document.getElementById('copy')?.addEventListener('click', () => {
   const t = document.getElementById('mailtxt').textContent, b = document.getElementById('copy');
@@ -2393,6 +2395,7 @@ const camPos = new THREE.Vector3(), camTgt = new THREE.Vector3(), corner = new T
 const CORNERS = [[-BW/2,-BH/2],[BW/2,-BH/2],[BW/2,BH/2],[-BW/2,BH/2]];
 
 function frame(now){
+  adaptResolution(now - last, now);
   const dt = Math.min(.05,(now-last)/1000); last = now;
   if (!reduced) uniforms.uTime.value += dt;
   // the wall powers up right after the dive out of the MacBook
@@ -2409,6 +2412,7 @@ function frame(now){
   sy += (scrollY - sy)*(reduced ? 1 : .085);
   const {prog, st} = storyAt(sy);
   updateWriting(sy, now);
+  if (st > 6 || SHOT) loadReelMedia();
   if (!land){
     const cur = Math.floor(st/2), within = st - 2*cur;
     // the darkened bottom reaches a little above wherever the current copy starts (long copy, taller shade)
@@ -2579,7 +2583,12 @@ function grade(im, sat){
   g.putImageData(d, 0, 0); return c;
 }
 const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so the pitch video gets the same look
+// the reel photos are only needed from "So far" on: they load once the reader is a few chapters in, so the models and
+// textures the opening needs get the connection to themselves
+let reelLoading = false;
+function loadReelMedia(){ if (reelLoading) return; reelLoading = true;
 ['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); reelShown.reel = null; /* repaint: it may have been asked for before it loaded */ }; im.src = `/media/${n}.jpg`; });
+}
 let videoOn = false;
 { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
@@ -2616,15 +2625,15 @@ function finishLoader(){
   if (ld.done || !ld.fonts || ld.items < ld.total) return;
   ld.done = true;
   // let the domains roll for a moment at least (they keep rolling as it fades), then lift and let the desk light come up
-  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); }, Math.max(0, 900 - (performance.now() - ld.t0)));
+  setTimeout(() => { ld.el.classList.add('done'); desk.begin(); window.__startIphone?.(); }, Math.max(0, 900 - (performance.now() - ld.t0)));
 }
-setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } }, 9000);
+setTimeout(() => { if (!ld.done){ ld.done = true; ld.el.classList.add('done'); desk.begin(); } window.__startIphone?.(); }, 9000);
 
 const start = () => {
   fitLockup();
   ld.fonts = 1; paintLoader(); finishLoader();
   paintName(); paintMacName(); drawNotif(); measure();
-  if (SHOT){ scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
+  if (SHOT){ window.__startIphone?.(); scrollTo(0, scrollForSt(+SHOT[1])); sy = scrollY; }
   requestAnimationFrame(frame);
 };
 fontsReady.then(start, start);

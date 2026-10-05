@@ -6,7 +6,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setSize(
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x20232a);
 const camera = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, .01, 100);
 scene.add(new THREE.AmbientLight(0xffffff, 2.5));
-const gltf = await new GLTFLoader().loadAsync('/models/_scan.glb');
+const gltf = await new GLTFLoader().loadAsync('/tools/_scan.glb');
 const m = gltf.scene; const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
 m.traverse(o => { if (o.isMesh){ o.material = new THREE.MeshBasicMaterial({ map: o.material.map }); } });
 const piv = new THREE.Group(); m.position.sub(c); piv.add(m); scene.add(piv);

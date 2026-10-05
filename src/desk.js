@@ -32,8 +32,9 @@ export function createDesk({ envTex, nameTex, stacked }){
   // and a slightly different tone, the way a real solid-oak top is built. The block underneath carries the
   // chamfers and the sides.
   const tl = new THREE.TextureLoader();
-  const oakTex = (f, srgb) => { const t = tl.load(`/textures/oak_veneer_05_${f}_2k.jpg`); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
-  const oakMaps = { map: oakTex('diff', true), normalMap: oakTex('nor_gl'), roughnessMap: oakTex('rough') };
+  // webp, and 1k on phones (the desk is small there and the download matters)
+  const oakTex = (f, srgb) => { const t = tl.load(`/textures/oak_veneer_05_${f}_${stacked() ? '1k' : '2k'}.webp`); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const oakMaps = { map: oakTex('diff', true), normalMap: oakTex('nor_gl') }; // (the scan's roughness map isn't used, so it isn't loaded)
   // the scan is a pale, low-contrast raw veneer; oiled oak is warmer and its grain darker, so the shader warms it
   // and steepens the contrast of the grain
   const oakMat = extra => {
@@ -44,7 +45,7 @@ export function createDesk({ envTex, nameTex, stacked }){
     return m;
   };
   const blockMat = oakMat({}); // world UVs on the block are in units: scale them to metres
-  [oakMaps.map, oakMaps.normalMap, oakMaps.roughnessMap].forEach(t => t.repeat.set(.1, .1));
+  [oakMaps.map, oakMaps.normalMap].forEach(t => t.repeat.set(.1, .1));
   const DW = 17, DD = 7.4, DT = .4, CH = .06;
   const deskTop = new THREE.Mesh(chamferedBox(DW, DD, DT, CH), blockMat);
   deskTop.rotation.x = -Math.PI/2; deskTop.position.set(0, -DT/2, 0); scene.add(deskTop);
