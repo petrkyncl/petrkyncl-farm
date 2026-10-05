@@ -92,22 +92,28 @@ function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
   g.fillStyle = '#000'; g.fillRect(0,0,w,h);
   if (lines && lines.length){
-    // the milestone huge (rows split on '\n'), the date tracked out underneath; all of it right of the copy column
-    const [big, small] = lines, cx = land ? w*.56 : w/2, maxW = w*(land ? .46 : .86);
+    // the milestone huge (rows split on '\n'), its number under it, the date smallest; all of it right of the copy column
+    const [big, note, date] = lines, cx = land ? w*.56 : w/2, maxW = w*(land ? .46 : .86);
     const font = (s, wt) => `${wt} ${s}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
     const rows = land ? big.split('\n') : [big.replace(/\n/g, ' ')]; // a tall screen has only a strip of wall above the copy: one row there
     // one size for every row: the largest that lets the widest row fit and the stack fit the wall's height
-    let bs = h*(land ? (rows.length > 1 ? .4 : .5) : .11); g.font = font(bs, 900);
+    let bs = h*(land ? (rows.length > 1 ? (note ? .32 : .4) : (note ? .42 : .5)) : .085); g.font = font(bs, 900);
     const widest = Math.max(...rows.map(r => g.measureText(r).width)); if (widest > maxW){ bs *= maxW/widest; g.font = font(bs, 900); }
-    const lh = bs*.86, top = (land ? h*.5 : h*.09) - (rows.length - 1)*lh/2 + bs*.34; // on a tall screen the copy covers the lower wall
+    // centre the whole block (name, number, date) on the wall; on a tall screen it sits at the top, the copy covers the rest
+    const below = (note ? h*(land ? .1 : .032)*1.9 : 0) + (date ? h*(land ? .036 : .016)*1.9 : 0);
+    const lh = bs*.86, top = land ? h*.5 - ((rows.length - 1)*lh + below)/2 + bs*.34 : h*.065 - (rows.length - 1)*lh/2 + bs*.34;
     rows.forEach((r, i) => g.fillText(r, cx, top + i*lh));
-    if (small){
-      let ss = h*(land ? .052 : .024); g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*.2).toFixed(1)}px`;
-      const sw = g.measureText(small).width; if (sw > maxW){ ss *= maxW/sw; g.font = font(ss, 700); }
-      g.fillText(small, cx, top + (rows.length - 1)*lh + ss*2.2);
+    // the number that matters (28 VIDEOS, OF 80) clearly under it, then the date, smaller and dimmer
+    let y = top + (rows.length - 1)*lh;
+    const line = (txt, size, track, col) => {
+      let ss = size; g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*track).toFixed(1)}px`;
+      const sw = g.measureText(txt).width; if (sw > maxW){ ss *= maxW/sw; g.font = font(ss, 700); }
+      g.fillStyle = col; y += ss*1.9; g.fillText(txt, cx, y);
       if ('letterSpacing' in g) g.letterSpacing = '0px';
-    }
+    };
+    if (note) line(note, h*(land ? .1 : .032), .08, '#fff');
+    if (date) line(date, h*(land ? .036 : .016), .32, '#8f8f8f');
   }
   tex.needsUpdate = true;
 }
@@ -2280,7 +2286,8 @@ document.getElementById('hDev').textContent = COUNT;
 // ---------- "So far" ----------
 const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:2}, {t:7}]; // … board, school reel (then letters), hackathon reel; at the close the phones just keep working behind him
 // The timeline is data: add a milestone here and the chapter grows (its scroll length scales with the count).
-// The wall spells out the milestone itself big (wall: '\\n' breaks the rows), with the date (and a number) small under it.
+// The wall spells out the milestone itself big (wall: '\\n' breaks the rows), the number that matters (note) under it,
+// and the date smallest and dimmer at the bottom.
 const MILESTONES = [
   { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, about $1,000.', wall:'FIVERR', note:'31 ORDERS' },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:'TASKER\nPROJECTS' },
@@ -2295,7 +2302,7 @@ const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts 
 const tlList = document.querySelector('.tl-list'), tlEl = document.querySelector('.tl');
 tlList.innerHTML = MILESTONES.map(m => `<li><span class="tl-date">${m.date}</span><span class="tl-title">${m.title}</span><span class="tl-text">${m.text}</span></li>`).join('');
 document.getElementById('c6').style.setProperty('--len', 160 + MILESTONES.length*45);
-const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; return { li, wall: [m.wall, [m.date.toUpperCase(), m.note].filter(Boolean).join(' · ')] }; });
+const ROAD = [...tlList.children].map((li, i) => { const m = MILESTONES[i]; return { li, wall: [m.wall, m.note || '', m.date.toUpperCase()] }; });
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
   const k = Math.max(0, Math.min(ROAD.length-1, Math.floor((st - ROAD_ST)*ROAD.length)));
