@@ -83,7 +83,8 @@ const WALL_ASPECT = (C*SX)/(R*SY);
 function wallCanvas(){ const c=document.createElement('canvas'); c.height=1024; c.width=Math.round(1024*WALL_ASPECT); const g=c.getContext('2d'); g.fillStyle='#000'; g.fillRect(0,0,c.width,c.height); return [c,g]; }
 const [nameC, nameG] = wallCanvas();
 const [faceC, faceG] = wallCanvas();
-const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTexture(faceC);
+const [faceC2, faceG2] = wallCanvas(); // the next reel item, for the flip from one photo to the next
+const nameTex = new THREE.CanvasTexture(nameC), faceTex = new THREE.CanvasTexture(faceC), faceTex2 = new THREE.CanvasTexture(faceC2);
 // "So far": the wall becomes a board that rewrites itself milestone by milestone (A = previous, B = next)
 const [boardAC, boardAG] = wallCanvas(), [boardBC, boardBG] = wallCanvas();
 const boardATex = new THREE.CanvasTexture(boardAC), boardBTex = new THREE.CanvasTexture(boardBC);
@@ -130,15 +131,15 @@ let meUV = null;
 // (the camera sees roughly u .25–.8 of the wall right of the copy, so the reel stays inside that)
 function reelRegion(){ const w = faceC.width, h = faceC.height; return land ? { x: w*.3, y: h*.06, w: w*.47, h: h*.88 } : { x: 0, y: h*.03, w, h: h*.44 }; }
 // cover-fit src into the region around a focus point; returns the drawn rect
-function coverInto(src, sw, sh, r, fx, fy, ax = .5, zoom = 1){
+function coverInto(src, sw, sh, r, fx, fy, ax = .5, zoom = 1, g = faceG){
   const s = Math.max(r.w/sw, r.h/sh)*zoom, dw = sw*s, dh = sh*s;
   const x = Math.min(r.x, Math.max(r.x + r.w - dw, r.x + r.w*ax - fx*dw)), y = Math.min(r.y, Math.max(r.y + r.h - dh, r.y + r.h/2 - fy*dh));
-  faceG.save(); faceG.beginPath(); faceG.rect(r.x, r.y, r.w, r.h); faceG.clip(); faceG.drawImage(src, x, y, dw, dh); faceG.restore();
+  g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip(); g.drawImage(src, x, y, dw, dh); g.restore();
   return { x, y, w: dw, h: dh };
 }
-function containInto(src, sw, sh, r, zoom = 1, dx = 0){
+function containInto(src, sw, sh, r, zoom = 1, dx = 0, g = faceG){
   const s = Math.min(r.w/sw, r.h/sh)*zoom, dw = sw*s, dh = sh*s, x = r.x + (r.w - dw)/2 + dx*r.w, y = land ? r.y + r.h - dh : r.y;
-  faceG.drawImage(src, x, y, dw, dh); return { x, y, w: dw, h: dh };
+  g.drawImage(src, x, y, dw, dh); return { x, y, w: dw, h: dh };
 }
 // Two reels share the face canvas: the school (section 7) and the hackathon (section 8). Story time `st` holds
 // section i over 2i..2i+1, so each reel's beats are offsets from its section's hold.
@@ -173,32 +174,37 @@ const CAPTIONS = [
     caps: ['The room', 'The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
 ];
 const itemRegion = it => it.full && land ? { x: 0, y: 0, w: faceC.width, h: faceC.height } : reelRegion();
-function drawReelItem(it){
+function drawReelItem(it, g = faceG){
+  g.fillStyle = '#000'; g.fillRect(0, 0, g.canvas.width, g.canvas.height);
   const r = itemRegion(it), s = REEL[it.src];
   if (!s) return;
   // edge to edge on a wide wall, the subject lands right of the copy (which covers about the wall's left sixth)
   const ax = it.ax !== undefined && land ? it.ax : it.full && land ? .6 : .5;
-  if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy, ax, it.zoom); return; }
+  if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy, ax, it.zoom, g); return; }
   if (it.contain){
-    const d = containInto(s, s.width, s.height, r, it.zoom, land ? it.dx || 0 : 0);
+    const d = containInto(s, s.width, s.height, r, it.zoom, land ? it.dx || 0 : 0, g);
     if (it.me) meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
-  } else coverInto(s, s.width, s.height, r, it.fx, it.fy, ax, it.zoom);
+  } else coverInto(s, s.width, s.height, r, it.fx, it.fy, ax, it.zoom, g);
 }
-// which item, and how far the sweep to the next one has got (left to right, soft edge)
-const REEL_SWEEP = .06;
+// From one photo to the next the phones turn over like cards in a stadium: a wave runs diagonally across the wall,
+// each phone spins round its upright and shows the next photo once it has passed edge-on. The current item is in
+// faceC, the next one in faceC2; uReelF (0 → 1) drives the wave, each phone's place in it is aFlip.
+const REEL_SWEEP = .085, FLIP_DUR = .34; // the sweep in story time; one phone's turn as a share of it
 const beatAt = (at, st) => { let k = 0; while (k < at.length - 1 && st >= at[k+1]) k++; return k; };
+const reelShown = { reel: null, a: -1, b: -1 };
 function paintReel(reel, st){
-  const w = faceC.width, h = faceC.height, at = reel.at, k = beatAt(at, st);
+  const at = reel.at, k = beatAt(at, st);
   const next = Math.min(k + 1, at.length - 1), f = next > k ? clamp01((st - (at[next] - REEL_SWEEP))/REEL_SWEEP) : 0;
-  faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h);
-  drawReelItem(reel.items[k]);
-  if (f > 0){
-    const r = itemRegion(reel.items[next]), edge = r.x + (r.w + 80)*f - 40;
-    faceG.save(); faceG.beginPath(); faceG.rect(0, 0, edge, h); faceG.clip(); faceG.fillStyle = '#000'; faceG.fillRect(0, 0, w, h); drawReelItem(reel.items[next]); faceG.restore();
-  }
-  faceTex.needsUpdate = true;
+  const isVideo = i => reel.items[i].src === 'video';
+  // repaint only what changed (the video every frame it's on)
+  if (reelShown.reel !== reel || reelShown.a !== k || isVideo(k)){ drawReelItem(reel.items[k], faceG); faceTex.needsUpdate = true; }
+  if (next !== k && (reelShown.reel !== reel || reelShown.b !== next || isVideo(next))){ drawReelItem(reel.items[next], faceG2); faceTex2.needsUpdate = true; }
+  reelShown.reel = reel; reelShown.a = k; reelShown.b = next;
+  uniforms.uReelF.value = f;
   return (f > .5 ? next : k);
 }
+// one phone's turn: 0 → 1 over its slice of the wave
+const flipOf = (i, f) => clamp01((f - aFlip[i]*(1 - FLIP_DUR))/FLIP_DUR);
 // the one phone left at the end of the school beat: picked where the reel sits, it ends up showing me on stage
 const PICK = (() => {
   const u = land ? .55 : .5, v = land ? .48 : .74;
@@ -241,32 +247,36 @@ screenGeo.setAttribute('aId', new THREE.InstancedBufferAttribute(aId,1));
 screenGeo.setAttribute('aType', new THREE.InstancedBufferAttribute(aType,1));
 screenGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(aSeed,1));
 screenGeo.setAttribute('aDelay', new THREE.InstancedBufferAttribute(aDelay,1));
+// the photo flip runs top left → bottom right, with each phone a little early or late
+const aFlip = new Float32Array(COUNT);
+for (let i=0;i<COUNT;i++){ const b=base[i]; aFlip[i] = Math.min(1, Math.max(0, ((b.c/(C-1))*.62 + (1 - b.r/(R-1))*.38)*.82 + rnd()*.18)); }
+screenGeo.setAttribute('aFlip', new THREE.InstancedBufferAttribute(aFlip,1));
 
 const uniforms = {
   uTime:{value:0}, uWall:{value:1}, uFrom:{value:9}, uTo:{value:9}, uSweep:{value:0},
   uHover:{value:-1}, uBoot:{value:reduced?1.1:0}, uGrid:{value:new THREE.Vector2(C,R)},
   uName:{value:nameTex}, uFace:{value:faceTex}, uFaceColor:{value:1}, uRoom:{value:room.clone()}, uGain:{value:1}, uDim:{value:0},
   uBoardA:{value:boardATex}, uBoardB:{value:boardBTex}, uBoardWipe:{value:0}, uImgFrom:{value:0}, uImgTo:{value:0}, uImgWipe:{value:0},
-  uNewId:{value:-1}, uNewOn:{value:1}, uFaceSat:{value:.28},
+  uNewId:{value:-1}, uNewOn:{value:1}, uFaceSat:{value:.28}, uFaceB:{value:faceTex2}, uReelF:{value:0},
   uOne:{value:0}, uPickOn:{value:0}, uPickId:{value:PICK.i}, uPickCell:{value:new THREE.Vector2(PICK.c, PICK.r)}, uPick:{value:pickTex}
 };
 
 const screenMat = new THREE.ShaderMaterial({
   uniforms,
   vertexShader:`
-    attribute vec2 aCell; attribute float aId, aType, aSeed, aDelay, aApp;
-    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
+    attribute vec2 aCell; attribute float aId, aType, aSeed, aDelay, aApp, aFlip;
+    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp, vFlip;
     void main(){
-      vUv=uv; vCell=aCell; vId=aId; vType=aType; vSeed=aSeed; vDelay=aDelay; vApp=aApp;
+      vUv=uv; vCell=aCell; vId=aId; vType=aType; vSeed=aSeed; vDelay=aDelay; vApp=aApp; vFlip=aFlip;
       vec4 mv = modelViewMatrix * instanceMatrix * vec4(position,1.0);
       vDepth = -mv.z;
       gl_Position = projectionMatrix * mv;
     }`,
   fragmentShader:`
     uniform float uTime, uWall, uFrom, uTo, uSweep, uHover, uBoot, uGain, uDim, uBoardWipe, uImgFrom, uImgTo, uImgWipe, uFaceColor;
-    uniform float uOne, uPickOn, uPickId, uNewId, uNewOn, uFaceSat; uniform vec2 uPickCell;
+    uniform float uOne, uPickOn, uPickId, uNewId, uNewOn, uFaceSat, uReelF; uniform vec2 uPickCell; uniform sampler2D uFaceB;
     uniform vec2 uGrid; uniform sampler2D uName, uFace, uBoardA, uBoardB, uPick; uniform vec3 uRoom;
-    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp;
+    varying vec2 vUv, vCell; varying float vId, vType, vSeed, vDelay, vDepth, vApp, vFlip;
     const float ASP = ${(SH/SW).toFixed(4)};
     float hash(float n){ return fract(sin(n*12.9898+4.1414)*43758.5453); }
     float sdBox(vec2 p, vec2 b, float r){ vec2 q=abs(p)-b+r; return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r; }
@@ -644,7 +654,10 @@ const screenMat = new THREE.ShaderMaterial({
       float a = real ? 0.0 : clamp(app(typ, q, t, vSeed), 0.0, 1.2);
 
       vec2 wuv = (vCell + vUv) / uGrid;
-      vec3 fc = texture2D(uFace, wuv).rgb;
+      // the photo reel: this phone shows the next photo once its turn has passed edge-on (see paintReel)
+      float lp = clamp((uReelF - vFlip*(1.0 - ${FLIP_DUR.toFixed(2)}))/${FLIP_DUR.toFixed(2)}, 0.0, 1.0);
+      vec3 fc = mix(texture2D(uFace, wuv).rgb, texture2D(uFaceB, wuv).rgb, step(.5, lp));
+      float turn = abs(cos(lp*3.14159265)); // 1 face on, 0 edge-on
       float fl = smoothstep(.05, 1.0, dot(fc, vec3(.299,.587,.114)))*.9;
       float nm = texture2D(uName, wuv).r;
       // sample everything up front (no texture reads in divergent branches), then pick per cell
@@ -702,6 +715,7 @@ const screenMat = new THREE.ShaderMaterial({
       float flash = on*(1.0-smoothstep(0.0,.06,uBoot-vSeed));
       col = mix(bg*.35, col, on) + vec3(.6,.65,.75)*flash;
       col *= mix(1.0, .42, uDim);
+      col *= .35 + .65*turn; // turning edge-on in the photo flip
       // the screens are authored in display space; the composer works in linear light
       col = pow(max(col, vec3(0.0)), vec3(2.2)) * uGain;
       col = mix(col, uRoom, smoothstep(34.0, 72.0, vDepth));
@@ -725,6 +739,8 @@ const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THRE
 // The slot the iPhone came out of stays empty while it's away; once it has gone for good, a fresh Android flies in
 // on its own, slides into the slot, gets its cable and boots. refill: 0 empty … 1 docked.
 let hiddenSlot = -1, refill = 0;
+const flipT = new Float32Array(COUNT); // each phone's turn in the photo flip, 0 → 1 (see flipOf)
+const flipRot = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
 const flyQ = new THREE.Quaternion(), flyE = new THREE.Euler(), flyV = new THREE.Vector3(), flyN = new THREE.Vector3();
 function place(i){
   const b=base[i], l=lift[i];
@@ -732,6 +748,13 @@ function place(i){
   N.set(Math.sin(b.ry),0,Math.cos(b.ry));
   let k = 1 + l*.08, plugged = 1;
   tmpP.set(b.x,b.y,b.z).addScaledVector(N, l*.9);
+  const ft = flipT[i];
+  if (ft > 0 && ft < 1){
+    // turn to edge-on, swap, come back round from the other side: 0 → 90°, then −90° → 0, popping out as it turns
+    const ang = ft < .5 ? easeIO(ft*2)*Math.PI/2 : -easeIO((1 - ft)*2)*Math.PI/2;
+    tmpQ.multiply(flipRot.setFromAxisAngle(UP, ang));
+    tmpP.addScaledVector(N, Math.sin(ft*Math.PI)*.45);
+  }
   if (i === hiddenSlot){
     // it comes up from below right on a curve (quadratic Bézier in the slot's frame: along the wall, up, out of the
     // wall), tumbling less and less; it squares up in front of the slot, then pushes in
@@ -1920,7 +1943,7 @@ composer.addPass(new OutputPass());
 const HEAD_ST = 17.35; // story time it starts assembling (the move into the last chapter)
 const headRig = new THREE.Group(); camera.add(headRig);
 let head = null;
-createHead().then(h => { head = h; h.uniforms.uColor.value.multiplyScalar(1.7); // the site's tone mapping and high bloom threshold eat more light than the lab
+createHead().then(h => { head = h; h.uniforms.uColor.value.multiplyScalar(1.12); // just under the bloom threshold: only the brightest bits glow
   headRig.add(h.group); h.group.visible = false; placeHead(); }).catch(e => console.warn('head', e));
 function placeHead(){
   const d = 3, halfH = d*Math.tan(THREE.MathUtils.degToRad(20)), halfW = halfH*camera.aspect;
@@ -2396,6 +2419,12 @@ function frame(now){
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
   const reel = REELS.find(r => st > r.from && st < r.to);
   const reelK = reel ? paintReel(reel, st) : -1;
+  if (!reel) uniforms.uReelF.value = 0;
+  {
+    const f = reduced ? 0 : uniforms.uReelF.value; let moved = false;
+    for (let i = 0; i < COUNT; i++){ const ft = f > 0 && f < 1 ? flipOf(i, f) : 0; if (ft !== flipT[i]){ flipT[i] = ft; place(i); moved = true; } }
+    if (moved){ bodies.instanceMatrix.needsUpdate = screens.instanceMatrix.needsUpdate = cables.instanceMatrix.needsUpdate = true; }
+  }
   if (REEL.video){
     const v = REEL.video, want = st > REELS[1].at[1] - REEL_SWEEP - .02 && st < HACK_ST + 1.2;
     // the pitch is the whole raw take, uncut (it only loops after a minute and a half); it starts loading as the

@@ -23,7 +23,8 @@ export async function createHead(url = '/media/head.bin', { spacing = .0052 } = 
     uColor: { value: new THREE.Color(.82, .9, 1.0) }, uScan: { value: -9 }, uSpacing: { value: spacing }
   };
   const mat = new THREE.ShaderMaterial({
-    uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    // normal blending: where dots overlap (the lit forehead and cheek) they cover each other instead of adding up to white
+    uniforms, transparent: true, depthWrite: false, blending: THREE.NormalBlending,
     vertexShader: `
       attribute float aLum, aSeed;
       uniform float uTime, uIn, uPx, uSize, uScan, uSpacing; uniform vec2 uFade;
