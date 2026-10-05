@@ -118,3 +118,5 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .tl-list li.on .tl-text{max-height:6em;opacity:1;margin-top:8px}
 .credits{font-size:9px !important;opacity:.6}
 .credits a{color:inherit}
+.reel-cap{position:fixed;left:0;top:0;z-index:3;pointer-events:none;display:flex;gap:14px;align-items:baseline;padding-top:12px;font-weight:200;font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:var(--text);opacity:0;transition:opacity .4s;white-space:nowrap}
+.reel-cap b{font-weight:300;color:var(--amber);letter-spacing:.12em}

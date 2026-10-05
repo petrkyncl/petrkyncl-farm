@@ -117,7 +117,7 @@ function paintName(){
 }
 // Finale reel on the wall, in colour: the pitch (video), the prize, the group photo. Painted into the face canvas.
 // On a wide wall it sits right of the copy column; on a tall wall in the top part (the copy covers the bottom).
-const REEL = { video: null, kate: null, prize: null, group: null };
+const REEL = { video: null, pitch: null, ivo: null, kate: null, prize: null, group: null };
 const ME_IN_GROUP = { x: .828, y: .14 }; // my head in group.jpg (far right, light hoodie)
 let meUV = null;
 // (the camera sees roughly u .25–.8 of the wall right of the copy, so the reel stays inside that)
@@ -133,18 +133,26 @@ function containInto(src, sw, sh, r){
   const s = Math.min(r.w/sw, r.h/sh), dw = sw*s, dh = sh*s, x = r.x + (r.w - dw)/2, y = land ? r.y + r.h - dh : r.y;
   faceG.drawImage(src, x, y, dw, dh); return { x, y, w: dw, h: dh };
 }
+// the reel, in order; each item: how to place it, and the caption that rides under it
+const REEL_ITEMS = [
+  { src:'video', fx:.3,  fy:.45, cap:'The pitch' },
+  { src:'pitch', fx:.62, fy:.35, cap:'On stage' },
+  { src:'ivo',   fx:.3,  fy:.5,  cap:'Ivo Klimsa · organiser' },
+  { src:'kate',  fx:.47, fy:.4,  cap:'Kate · juror' },
+  { src:'prize', fx:.55, fy:.4,  cap:'Second place' },
+  { src:'group', contain:true,   cap:'End of the night' }
+];
 function drawReelItem(k){
-  const r = reelRegion();
-  if (k === 0 && REEL.video && REEL.video.readyState >= 2) coverInto(REEL.video, REEL.video.videoWidth, REEL.video.videoHeight, r, .3, .45);
-  else if (k === 1 && REEL.kate) coverInto(REEL.kate, REEL.kate.width, REEL.kate.height, r, .47, .4);
-  else if (k === 2 && REEL.prize) coverInto(REEL.prize, REEL.prize.width, REEL.prize.height, r, .55, .4);
-  else if (k === 3 && REEL.group){
-    const d = containInto(REEL.group, REEL.group.width, REEL.group.height, r);
+  const r = reelRegion(), it = REEL_ITEMS[k], s = REEL[it.src];
+  if (!s) return;
+  if (it.src === 'video'){ if (s.readyState >= 2) coverInto(s, s.videoWidth, s.videoHeight, r, it.fx, it.fy); return; }
+  if (it.contain){
+    const d = containInto(s, s.width, s.height, r);
     meUV = { u: (d.x + ME_IN_GROUP.x*d.w)/faceC.width, v: 1 - (d.y + ME_IN_GROUP.y*d.h)/faceC.height };
-  }
+  } else coverInto(s, s.width, s.height, r, it.fx, it.fy);
 }
 // which item, and how far the sweep to the next one has got (left to right, soft edge)
-const REEL_AT = [14.0, 14.3, 14.54, 14.78], REEL_SWEEP = .07; // pitch, talking it through after, the prize, everyone
+const REEL_AT = [14.0, 14.17, 14.33, 14.5, 14.66, 14.82], REEL_SWEEP = .06;
 function paintReel(st){
   const w = faceC.width, h = faceC.height;
   let k = 0; while (k < REEL_AT.length - 1 && st >= REEL_AT[k+1]) k++;
@@ -1691,7 +1699,7 @@ document.getElementById('copy').addEventListener('click', () => {
 const JOBS = ['instagram · scroll + like','mationx · flow 3/3 running','internát · gate.open ✓','whatsapp · typing a reply','scanner · margin +18%','recents · transcribing 04:12','wear close · pulse to zuzka ♥'];
 // the automation mix, chosen per phone exactly like the shader does (hash of its seed)
 const mixJob = i => ['whatsapp · typing a reply','telegram · sending 3/12','instagram · liking the feed','tiktok · watching, liking'][aApp[i]];
-const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav');
+const scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
 const rPhones = reel(sPhones), rTaps = reel(sTaps), rHands = reel(document.getElementById('sHands')), rJobs = reel(document.getElementById('hJobs'));
@@ -1707,7 +1715,7 @@ const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:
 // The timeline is data: add a milestone here and the chapter grows (its scroll length scales with the count).
 // wall: [big, small] is what the phone wall spells out for it.
 const MILESTONES = [
-  { date:'Age 14', title:'Fiverr', text:'My first paid automation work. 31 orders, about $1,000.', wall:['31', 'FIVERR ORDERS'] },
+  { date:'Summer 2024', title:'Fiverr', text:'My first paid automation work, over the summer holidays. 31 orders, about $1,000.', wall:['31', 'FIVERR ORDERS'] },
   { date:'Age 15', title:'Smíchovská', text:'Got into the best IT school in the country: 621 applied for IT, 128 got in.', wall:['128', 'OF 621 ADMITTED'] },
   { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:['TASKER', 'PROJECTS.COM'] },
   { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:['MATIONX', 'SINCE AUG 2025'] },
@@ -1829,7 +1837,16 @@ function frame(now){
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
   const reelK = st > 12.6 ? paintReel(st) : -1;
   if (REEL.video){ const want = st > 12.6 && st < 15.2; if (want && REEL.video.paused) REEL.video.play().catch(()=>{}); else if (!want && !REEL.video.paused) REEL.video.pause(); }
-  const meOn = meUV && reelK === 3 && st >= 14 && st < 15.02;
+  const meOn = meUV && reelK === REEL_ITEMS.length - 1 && st >= 14 && st < 15.02;
+  // caption under the reel's bottom-left corner
+  const capOn = reelK >= 0 && st > 13.95 && st < 15.02;
+  if (capOn){
+    const r = reelRegion();
+    wallPoint(r.x/faceC.width + .004, 1 - (r.y + r.h)/faceC.height - .012, corner).applyMatrix4(wall.matrixWorld).project(camera);
+    reelCap.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${(-corner.y*.5+.5)*innerHeight}px)`;
+    if (reelCap.dataset.k !== String(reelK)){ reelCap.dataset.k = reelK; reelCap.querySelector('span').textContent = REEL_ITEMS[reelK].cap; reelCap.querySelector('b').textContent = String(reelK + 1).padStart(2, '0') + ' / ' + String(REEL_ITEMS.length).padStart(2, '0'); }
+  }
+  reelCap.style.opacity = capOn ? 1 : 0;
   if (meOn){
     wallPoint(meUV.u, meUV.v, corner).applyMatrix4(wall.matrixWorld).project(camera);
     meEl.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${Math.max(56, (-corner.y*.5+.5)*innerHeight)}px) translate(-50%,-100%)`;
@@ -1860,7 +1877,7 @@ function frame(now){
 }
 
 // finale reel media
-['kate', 'prize', 'group'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = im; }; im.src = `/media/${n}.jpg`; });
+['pitch', 'ivo', 'kate', 'prize', 'group'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = im; }; im.src = `/media/${n}.jpg`; });
 { const v = document.createElement('video'); v.src = '/media/pitch.mp4'; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('playsinline', ''); REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
   ? Promise.all(['900 120px "Big Shoulders Display"', '300 92px "Cormorant Garamond"', '400 64px Michroma', '400 20px Outfit', '700 20px Outfit', '900 20px Outfit'].map(f => document.fonts.load(f))).catch(()=>{})
