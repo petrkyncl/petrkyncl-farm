@@ -119,7 +119,7 @@ function paintName(){
 }
 // Finale reel on the wall, in colour: the pitch (video), the prize, the group photo. Painted into the face canvas.
 // On a wide wall it sits right of the copy column; on a tall wall in the top part (the copy covers the bottom).
-const REEL = { video: null, pitch: null, ivo: null, kate: null, prize: null, group: null, school: null, director: null };
+const REEL = { video: null, crowd: null, pitch: null, ivo: null, kate: null, prize: null, group: null, school: null, director: null };
 const ME_IN_GROUP = { x: .828, y: .14 }; // my head in group.jpg (far right, light hoodie)
 let meUV = null;
 // (the camera sees roughly u .25–.8 of the wall right of the copy, so the reel stays inside that)
@@ -150,7 +150,8 @@ const REELS = [
     { src:'school',   full:true, fx:.5, fy:.5 },
     { src:'director', full:true, fx:.3, fy:.3 }
   ] },
-  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .17, .33, .5, .66, .82].map(x => HACK_ST + x), items: [
+  { from: LETTERS_AT + .12, to: HACK_ST + 1.2, at: [0, .14, .28, .42, .56, .7, .84].map(x => HACK_ST + x), items: [
+    { src:'crowd', full:true, fx:.5,  fy:.5 }, // the room first: how many people were there
     { src:'video', full:true, fx:.3,  fy:.45, zoom:1.4 }, // I stand at the left of the frame: zoom so I can sit right of the copy
     { src:'pitch', full:true, fx:.62, fy:.35 },
     { src:'ivo',   full:true, fx:.19, ax:.155, fy:.5 }, // Petr's crop, edge to edge: Ivo starts just right of the copy, the lectern, my hand on it
@@ -164,7 +165,7 @@ const CAPTIONS = [
   { from: SCHOOL_ST - .05, to: SCHOOL_ST + 1.02, at: [0, .25, .5, .86].map(x => SCHOOL_ST + x),
     caps: ['Smíchovská · Prague 5', 'Radko Šablík · director', '400 motivation letters', 'One free place'] },
   { from: HACK_ST - .05, to: HACK_ST + 1.02, at: REELS[1].at,
-    caps: ['The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
+    caps: ['The room', 'The pitch', 'On stage', 'Ivo Klimsa · organiser', 'Kate · juror', 'Second place', 'End of the night'] }
 ];
 const itemRegion = it => it.full && land ? { x: 0, y: 0, w: faceC.width, h: faceC.height } : reelRegion();
 function drawReelItem(it){
@@ -2161,9 +2162,9 @@ function frame(now){
   const reel = REELS.find(r => st > r.from && st < r.to);
   const reelK = reel ? paintReel(reel, st) : -1;
   if (REEL.video){
-    const v = REEL.video, want = st > HACK_ST - 1.4 && st < HACK_ST + 1.2;
+    const v = REEL.video, want = st > REELS[1].at[1] - REEL_SWEEP - .02 && st < HACK_ST + 1.2;
     // the pitch is the whole raw take, uncut (it only loops after a minute and a half); it starts loading as the
-    // school chapter comes up and plays from the top every time the hackathon comes into view
+    // school chapter comes up and plays from the top every time its beat comes up
     if (st > SCHOOL_ST - 2 && v.preload !== 'auto'){ v.preload = 'auto'; v.load(); }
     if (want && v.paused){ if (!videoOn) v.currentTime = 0; v.play().catch(()=>{}); }
     else if (!want && !v.paused) v.pause();
@@ -2227,7 +2228,7 @@ function grade(im, sat){
   g.putImageData(d, 0, 0); return c;
 }
 const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so the pitch video gets the same look
-['pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
+['crowd', 'pitch', 'ivo', 'kate', 'prize', 'group', 'school', 'director'].forEach(n => { const im = new Image(); im.onload = () => { REEL[n] = n in GRADE ? grade(im, GRADE[n]) : im; if (n === 'pitch') paintPick(im); }; im.src = `/media/${n}.jpg`; });
 let videoOn = false;
 { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none'; v.setAttribute('playsinline', ''); v.src = '/media/pitch.mp4'; REEL.video = v; }
 const fontsReady = document.fonts && document.fonts.load
