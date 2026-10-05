@@ -98,13 +98,23 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offs
 .reel span{font-size:inherit;font-weight:inherit;letter-spacing:0;text-transform:none;color:inherit}
 .hud b.reel{vertical-align:-.12em}
 
-/* "So far" timeline */
-.road{list-style:none;margin:0;padding:0 0 0 20px;border-left:1px solid var(--rule);display:flex;flex-direction:column;gap:11px;position:relative;max-width:27rem}
-.road::before{content:"";position:absolute;left:-1px;top:0;width:1px;height:calc(var(--p,0)*100%);background:var(--amber);box-shadow:0 0 8px var(--amber)}
-.road li{opacity:.3;transition:opacity .45s,transform .45s;font-weight:300;font-size:clamp(12px,.95vw,14px);line-height:1.45;color:#c4c8d4}
-.road li b{display:block;font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);margin-bottom:2px;transition:color .45s}
-.road li.done{opacity:.55}
-.road li.on{opacity:1;transform:translateX(5px)}
-.road li.on b{color:var(--amber)}
+/* "So far": a timeline that can keep growing. The list sits in a fixed window and slides so the current milestone
+   stays at the same height; the rail fills as you scroll; past milestones collapse to their title. */
+.tl{position:relative;height:min(52vh,460px);max-width:28rem;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 14%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 14%,#000 70%,transparent)}
+.tl-rail{position:absolute;left:5px;top:0;bottom:0;width:1px;background:var(--rule)}
+.tl-rail i{position:absolute;left:0;top:0;width:1px;height:calc(var(--p,0)*100%);background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.tl-list{list-style:none;margin:0;padding:0;position:absolute;left:0;right:0;top:0;transition:transform .7s cubic-bezier(.2,.8,.2,1);will-change:transform}
+.tl-list li{position:relative;padding:0 0 22px 30px;opacity:.28;transition:opacity .5s}
+.tl-list li::before{content:"";position:absolute;left:1px;top:7px;width:9px;height:9px;border-radius:50%;background:var(--room);border:1px solid var(--dim);transition:background .4s,border-color .4s,box-shadow .4s}
+.tl-list li.done{opacity:.5}
+.tl-list li.done::before{background:var(--dim);border-color:var(--dim)}
+.tl-list li.on{opacity:1}
+.tl-list li.on::before{background:var(--amber);border-color:var(--amber);box-shadow:0 0 10px var(--amber)}
+.tl-date{display:block;font-weight:200;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
+.tl-list li.on .tl-date{color:var(--amber)}
+.tl-title{display:block;margin-top:4px;font-family:var(--f-display);font-weight:700;text-transform:uppercase;font-size:clamp(20px,1.7vw,26px);line-height:1;letter-spacing:.01em;color:var(--text);transition:font-size .5s}
+.tl-list li.on .tl-title{font-size:clamp(30px,2.6vw,40px)}
+.tl-text{display:block;max-height:0;overflow:hidden;opacity:0;margin-top:0;font-weight:300;font-size:clamp(12px,.95vw,14px);line-height:1.5;color:#c4c8d4;transition:max-height .6s,opacity .5s,margin-top .5s}
+.tl-list li.on .tl-text{max-height:6em;opacity:1;margin-top:8px}
 .credits{font-size:9px !important;opacity:.6}
 .credits a{color:inherit}

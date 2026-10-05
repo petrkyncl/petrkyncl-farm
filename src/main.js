@@ -88,16 +88,19 @@ function paintBoard(g, tex, lines){
   const c = g.canvas, w = c.width, h = c.height;
   g.fillStyle = '#000'; g.fillRect(0,0,w,h);
   if (lines && lines.length){
-    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    const n = lines.length;
-    // measured fit: never wider than the hero name, and centred a little right so it clears the copy column
-    const font = s => `900 ${s}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
-    let size = h*(n === 1 ? .5 : .4);
-    g.font = font(size);
-    const widest = Math.max(...lines.map(l => g.measureText(l).width)), maxW = w*(land ? .42 : .86);
-    if (widest > maxW){ size *= maxW/widest; g.font = font(size); }
-    const cx = land ? w*.57 : w/2, top = land ? .5 : .28, gap = land ? .42 : .22;
-    lines.forEach((l, i) => g.fillText(l, cx, h*(top + (i - (n-1)/2)*gap)));
+    // first line huge, the caption small and tracked out underneath; both fit right of the copy column
+    const [big, small] = lines, cx = land ? w*.56 : w/2, maxW = w*(land ? .44 : .86);
+    const font = (s, wt) => `${wt} ${s}px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif`;
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    let bs = h*(land ? .52 : .3); g.font = font(bs, 900);
+    const bw = g.measureText(big).width; if (bw > maxW){ bs *= maxW/bw; g.font = font(bs, 900); }
+    const by = land ? h*.6 : h*.3; g.fillText(big, cx, by);
+    if (small){
+      let ss = bs*.17; g.font = font(ss, 700); if ('letterSpacing' in g) g.letterSpacing = `${(ss*.22).toFixed(1)}px`;
+      const sw = g.measureText(small).width; if (sw > maxW){ ss *= maxW/sw; g.font = font(ss, 700); }
+      g.fillText(small, cx, by + ss*1.9);
+      if ('letterSpacing' in g) g.letterSpacing = '0px';
+    }
   }
   tex.needsUpdate = true;
 }
@@ -1630,7 +1633,8 @@ const KP = land ? [
   [3,   -1.6,-3.6,12.4,      -.8,-4.2,.3],
   [4,    4.4,4.2,9.2,        5.4,4.2,.9],
   [5,   -4.8,.35,fitDist*.98, -4.8,0,0],
-  [6,   -4.8,.2,fitDist*1.04, -4.8,0,0]
+  [6,   -4.8,.2,fitDist*1.04, -4.8,0,0],
+  [7,   -4.8,.45,fitDist*1.1, -4.8,.1,0]
 ] : [
   [0,    0,.6,fitDist,      0,0,0],
   [.55, -3.4,9.4,15,       -3.0,8.8,1.5],
@@ -1640,11 +1644,12 @@ const KP = land ? [
   [3,   -1.4,-8.4,14,     -1.2,-8.6,1],
   [4,    2,10.4,13,         2.4,10.2,1.2],
   [5,    0,.5,fitDist,      0,0,0],
-  [6,    0,.4,fitDist*1.04, 0,0,0]
+  [6,    0,.4,fitDist*1.04, 0,0,0],
+  [7,    0,.6,fitDist*1.1,  0,.1,0]
 ];
 const posCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[1],k[2],k[3])), false, 'centripetal');
 const tgtCurve = new THREE.CatmullRomCurve3(KP.map(k=>new THREE.Vector3(k[4],k[5],k[6])), false, 'centripetal');
-const S = 7; // wall chapters
+const S = 8; // wall chapters
 // wp → curve parameter (the curve is parametrised by point index)
 // story time → camera position on the wall path. Sections hold (copy pinned) then transition; during a hold the
 // camera keeps drifting a little (MationX the most), during a transition it travels to the next chapter.
@@ -1698,10 +1703,23 @@ let tapT = 0;
 document.getElementById('hDev').textContent = COUNT;
 
 // ---------- "So far" ----------
-const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}];
+const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:0}]; // … board, hackathon reel, the name again to close
+// The timeline is data: add a milestone here and the chapter grows (its scroll length scales with the count).
+// wall: [big, small] is what the phone wall spells out for it.
+const MILESTONES = [
+  { date:'Age 14', title:'Fiverr', text:'My first paid automation work. 31 orders, about $1,000.', wall:['31', 'FIVERR ORDERS'] },
+  { date:'Age 15', title:'Smíchovská', text:'Got into the best IT school in the country: 621 applied for IT, 128 got in.', wall:['128', 'OF 621 ADMITTED'] },
+  { date:'Jan 2025', title:'TaskerProjects.com', text:'My first website, selling automations to anyone who would pay.', wall:['TASKER', 'PROJECTS.COM'] },
+  { date:'Aug 2025', title:'MationX', text:'TaskerProjects grew up and got a new name.', wall:['MATIONX', 'SINCE AUG 2025'] },
+  { date:'Nov 2025', title:'mationx.cloud', text:'An API, so other software can drive the phones too.', wall:['.CLOUD', 'THE API'] },
+  { date:'Sep 2026', title:'Second place', text:'Cursor Hackathon, Prague. Eighty projects, five hours each.', wall:['2ND', 'OF 80'] },
+  { date:'Now', title:'Hundreds of phones', text:'A fleet that runs around the clock, from an office on Arbesovo náměstí.', wall:['500+', 'PHONES ONLINE'] }
+];
 const ROAD_ST = 12; // story time where the "So far" chapter (section 6) starts holding
-const ROAD = [...document.querySelectorAll('.road li')].map(li => ({li, wall: li.dataset.wall.split('|')}));
-const roadEl = document.querySelector('.road');
+const tlList = document.querySelector('.tl-list'), tlEl = document.querySelector('.tl');
+tlList.innerHTML = MILESTONES.map(m => `<li><span class="tl-date">${m.date}</span><span class="tl-title">${m.title}</span><span class="tl-text">${m.text}</span></li>`).join('');
+document.getElementById('c6').style.setProperty('--len', 160 + MILESTONES.length*45);
+const ROAD = [...tlList.children].map((li, i) => ({ li, wall: MILESTONES[i].wall }));
 let roadK = -1, roadT0 = -1e9;
 function updateRoad(st, now){
   const k = Math.max(0, Math.min(ROAD.length-1, Math.floor((st - ROAD_ST)*ROAD.length)));
@@ -1710,9 +1728,11 @@ function updateRoad(st, now){
     paintBoard(boardBG, boardBTex, ROAD[k].wall);
     roadK = k; roadT0 = now;
     ROAD.forEach((r, i) => { r.li.classList.toggle('on', i === k); r.li.classList.toggle('done', i < k); });
+    // keep the current milestone at ~38% of the window
+    requestAnimationFrame(() => { const li = ROAD[k].li; tlList.style.transform = `translateY(${(tlEl.clientHeight*.38 - li.offsetTop).toFixed(1)}px)`; });
   }
   uniforms.uBoardWipe.value = reduced ? 1.1 : clamp01((now - roadT0)/900)*1.1;
-  roadEl.style.setProperty('--p', clamp01(st - ROAD_ST).toFixed(3));
+  tlEl.style.setProperty('--p', ((k + clamp01((st - ROAD_ST)*ROAD.length - k))/ROAD.length).toFixed(3));
 }
 
 // ---------- loop ----------
@@ -1809,13 +1829,13 @@ function frame(now){
   scrollCue.style.opacity = prog < .15 ? 1 : 0;
   const reelK = st > 12.6 ? paintReel(st) : -1;
   if (REEL.video){ const want = st > 12.6 && st < 15.2; if (want && REEL.video.paused) REEL.video.play().catch(()=>{}); else if (!want && !REEL.video.paused) REEL.video.pause(); }
-  const meOn = meUV && a===S-2 && loc > .9 && reelK === 3;
+  const meOn = meUV && reelK === 3 && st >= 14 && st < 15.02;
   if (meOn){
     wallPoint(meUV.u, meUV.v, corner).applyMatrix4(wall.matrixWorld).project(camera);
     meEl.style.transform = `translate(${(corner.x*.5+.5)*innerWidth}px,${Math.max(56, (-corner.y*.5+.5)*innerHeight)}px) translate(-50%,-100%)`;
   }
   meEl.style.opacity = meOn ? 1 : 0;
-  nav.style.opacity = ((a===S-2 && loc > .6) || uniforms.uDim.value > .3) ? 0 : 1;
+  nav.style.opacity = ((st > 13.85 && st < 15.1) || uniforms.uDim.value > .3) ? 0 : 1; // out of the reel's way
 
   // LEDs + HUD + live counters
   ledT += dt;
