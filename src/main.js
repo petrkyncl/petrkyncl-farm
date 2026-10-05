@@ -2389,13 +2389,12 @@ const mixJob = i => ['whatsapp · typing a reply','telegram · sending 3/12','in
 const veilEl = document.querySelector('.veil'), copies = secs.map(s => s.querySelector('.copy')), progEl = document.querySelector('#progress i'), scrollCue = document.getElementById('scroll'), meEl = document.getElementById('me'), nav = document.querySelector('.nav'), reelCap = document.getElementById('reelCap');
 const navLinks = [...document.querySelectorAll('.nav a')];
 const sPhones = document.getElementById('sPhones'), sTaps = document.getElementById('sTaps');
-const rPhones = reel(sPhones), rTaps = reel(sTaps), rHands = reel(document.getElementById('sHands')), rJobs = reel(document.getElementById('hJobs'));
+const rPhones = reel(sPhones), rTaps = reel(sTaps), rHands = reel(document.getElementById('sHands'));
 const tapsNow = () => Math.floor(clock.live*3600*31.7).toLocaleString('en-US');
 // the counters spin up like a slot machine every time the MationX chapter comes into view
 new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ rPhones.reveal(String(phones)); rTaps.reveal(tapsNow()); rHands.reveal('0'); } }), {threshold:.6})
   .observe(document.querySelector('.stats'));
 let tapT = 0;
-document.getElementById('hDev').textContent = COUNT;
 
 // ---------- "So far" ----------
 const WALL_MODES = [{img:0}, {t:7}, {t:5}, {t:6}, {t:2}, {img:1}, {img:2}, {img:2}, {t:7}]; // … board, school reel (then letters), hackathon reel; at the close the phones just keep working behind him
@@ -2634,7 +2633,6 @@ function frame(now){
     hudT = 0;
     jobs = Math.max(COUNT-6, Math.min(COUNT, jobs + (Math.random()>.5?1:-1)));
     if (Math.random() < .12) phones = Math.max(498, Math.min(526, phones + (Math.random() > .5 ? 1 : -1)));
-    rJobs.set(String(jobs));
     rPhones.set(String(phones));
     hTime.textContent = hhmm(clock.preview ?? clock.live);
     hShift.textContent = shiftName(clock.live);
