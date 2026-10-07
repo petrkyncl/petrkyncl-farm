@@ -218,7 +218,7 @@ export function createCard(envTex){
   // side button on the long edge: a polished pill standing 0.8 mm proud of the edge
   // shape: 1.6 mm across the card's thickness × 11 mm along the edge; extruded 0.8 mm outwards (rotated so the
   // extrusion points along +x, out of the edge)
-  const btn = new THREE.Mesh(smoothSlab(.016, .11, .008, .007, .002), chamfer);
+  const btn = new THREE.Mesh(smoothSlab(.016, .11, .008, .007, .002, 10, 3), chamfer); // a few mm: little geometry
   btn.rotation.y = Math.PI/2; btn.position.set(CARD.w/2 + .002, .16, 0); card.add(btn);
   // pinhole status light, top corner (left as seen from behind)
   const ledM = new THREE.MeshBasicMaterial({color:0x000000});
@@ -230,13 +230,13 @@ export function createCard(envTex){
 // A rounded slab with a continuous, smoothly shaded edge: many bevel and corner segments, vertices welded and
 // normals recomputed so the rounding reads as one surface (ExtrudeGeometry alone shades each facet flat).
 // UVs are planar local x/y, which is what the face maps expect.
-function smoothSlab(w, h, d, r, b){
+function smoothSlab(w, h, d, r, b, curveSegments = 48, bevelSegments = 10){
   const shape = new THREE.Shape(), x = w/2 - b, y = h/2 - b, rr = Math.max(.001, r - b);
   shape.moveTo(-x+rr, -y); shape.lineTo(x-rr, -y); shape.absarc(x-rr, -y+rr, rr, -Math.PI/2, 0, false);
   shape.lineTo(x, y-rr); shape.absarc(x-rr, y-rr, rr, 0, Math.PI/2, false);
   shape.lineTo(-x+rr, y); shape.absarc(-x+rr, y-rr, rr, Math.PI/2, Math.PI, false);
   shape.lineTo(-x, -y+rr); shape.absarc(-x+rr, -y+rr, rr, Math.PI, Math.PI*1.5, false);
-  let g = new THREE.ExtrudeGeometry(shape, { depth: Math.max(.0005, d - 2*b), bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 16, curveSegments: 96 });
+  let g = new THREE.ExtrudeGeometry(shape, { depth: Math.max(.0005, d - 2*b), bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments, curveSegments });
   g.translate(0, 0, -(d - 2*b)/2);
   g.deleteAttribute('normal'); g.deleteAttribute('uv');
   g = mergeVertices(g, 1e-6);

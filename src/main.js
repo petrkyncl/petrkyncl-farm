@@ -35,6 +35,7 @@ const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 // phones and tablets: a lower pixel ratio (their GPUs fill far fewer pixels per frame than a laptop's)
 const TOUCH = matchMedia('(pointer: coarse)').matches;
+renderer.info.autoReset = false;
 // Resolution: a pixel budget first (a 1440p retina window is 15 million pixels; the wall's 260 phone screens each draw an
 // app per pixel, too much for a mid-range GPU), then adapted to what the GPU keeps up with (adaptResolution).
 const PX_BUDGET = TOUCH ? 3.2e6 : 6e6;
@@ -259,8 +260,7 @@ function paintReel(reel, st){
 }
 // one phone's turn: 0 → 1 over its slice of the wave
 const flipOf = (i, f) => clamp01((f - aFlip[i]*(1 - FLIP_DUR))/FLIP_DUR);
-// the one phone left at the end of the school beat: picked where the reel sits, it ends up showing me at my desk,
-// the way I looked when I got in (not a later photo)
+// the one phone left at the end of the school beat: picked where the reel sits, it ends up showing me on stage
 const PICK = (() => {
   const u = land ? .55 : .5, v = land ? .48 : .74;
   const c = Math.round(u*C - .5), r = Math.round(v*R - .5);
@@ -286,7 +286,8 @@ function wallPoint(u, v, out){
 // glossy, but not so glossy that the key light's specular blooms into a blob across a cluster of phones
 const wallGlass = new THREE.MeshPhysicalMaterial({color:0x040507, roughness:.32, metalness:0, clearcoat:.6, clearcoatRoughness:.38, envMap:envTex, envMapIntensity:.32});
 const wallRail = new THREE.MeshStandardMaterial({color:0x3b3f47, metalness:.9, roughness:.38, envMap:envTex, envMapIntensity:.3});
-const bodies = new THREE.InstancedMesh(slab(BW,BH,BD,.135,.022), [wallGlass, wallRail], COUNT);
+// 260 of them, mostly small and far: a coarse rounding is invisible there and saves ~1.5 M triangles a frame
+const bodies = new THREE.InstancedMesh(slab(BW,BH,BD,.135,.022, 6, 2), [wallGlass, wallRail], COUNT);
 const screenGeo = new THREE.PlaneGeometry(SW,SH);
 const aCell = new Float32Array(COUNT*2), aId = new Float32Array(COUNT), aType = new Float32Array(COUNT), aSeed = new Float32Array(COUNT), aDelay = new Float32Array(COUNT), aApp = new Float32Array(COUNT);
 for (let i=0;i<COUNT;i++){
@@ -2604,6 +2605,7 @@ function frame(now){
     if (Math.abs(lift[i]-tg) > .002){ lift[i] += (tg-lift[i])*.18; place(i); bodies.instanceMatrix.needsUpdate = true; screens.instanceMatrix.needsUpdate = true; cables.instanceMatrix.needsUpdate = true; }
   }
 
+  renderer.info.reset(); // counted per frame across all passes (autoReset is off, below)
   composer.render();
 
   if (hover >= 0){
@@ -2710,7 +2712,7 @@ const GRADE = {}; // photos are graded in the screen shader now (uFaceSat), so t
 // textures the opening needs get the connection to themselves
 let reelLoading = false;
 function loadReelMedia(){ if (reelLoading) return; reelLoading = true;
-{ const im = new Image(); im.onload = () => paintPick(im, .48, .48); im.src = '/media/desk-selfie.jpg'; }
+{ const im = new Image(); im.onload = () => paintPick(im, .635, .4); im.src = '/media/pitch.jpg'; } // me on stage, pitching
 { // the office: a slow pan around the room (4× slowed with interpolated frames, there and back, grey)
   const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
   v.addEventListener('loadeddata', () => { roadK = -1; }); v.src = '/media/office.mp4'; BOARD_PHOTOS.office = v;
@@ -2726,6 +2728,8 @@ const fontsReady = document.fonts && document.fonts.load
 // debug: #shot=6.4 jumps straight to that story time (used for headless screenshots)
 const SHOT = /shot=([\d.]+)/.exec(location.hash);
 window.__pr = () => prNow;
+window.__meshes = () => { const out = []; scene.traverse(o => { if (!o.isMesh && !o.isPoints) return; const g = o.geometry, idx = g.index ? g.index.count : g.attributes.position.count, tris = o.isPoints ? 0 : idx/3, n = o.isInstancedMesh ? o.count : 1; let vis = true; for (let p = o; p; p = p.parent) if (!p.visible) vis = false; out.push([o.name || o.geometry.type, Math.round(tris), n, Math.round(tris*n), vis]); }); return out.sort((a, b) => b[3] - a[3]).slice(0, 14); };
+window.__info = () => { const r = renderer.info.render, m = renderer.info.memory; return { calls: r.calls, tris: r.triangles, points: r.points, geos: m.geometries, texs: m.textures, progs: renderer.info.programs?.length }; };
 window.__slotScreen = () => { if (slotIdx < 0) return null; const b = base[slotIdx], v = new THREE.Vector3(b.x, b.y, b.z).applyMatrix4(wall.matrixWorld).project(camera); return [Math.round((v.x*.5+.5)*innerWidth), Math.round((-v.y*.5+.5)*innerHeight), +refill.toFixed(2)]; }; // (for checking the adaptive resolution from a debugger)
 if (SHOT){ window.__pick = (x, y) => { const r = new THREE.Raycaster(); r.setFromCamera(new THREE.Vector2(x/innerWidth*2 - 1, -(y/innerHeight)*2 + 1), camera); return r.intersectObject(phone, true).slice(0, 8).map(h => `${[].concat(h.object.material).map(m => m.name || m.type).join('|')} @${h.distance.toFixed(4)} vis:${h.object.visible}`); }; window.__ui = () => UI.toDataURL('image/png'); window.__video = () => REEL.video; window.__goSt = st => scrollTo(0, scrollForSt(st)); } // for headless checks
 function scrollForSt(st){

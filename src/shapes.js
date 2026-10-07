@@ -11,8 +11,8 @@ export function rrShape(w, h, r){
 }
 
 // Rounded slab centred on the origin, caps facing ±z (material group 0 = caps, 1 = sides).
-export function slab(w, h, d, r, b){
-  const g = new THREE.ExtrudeGeometry(rrShape(w-2*b, h-2*b, Math.max(.002, r-b)), {depth:Math.max(.001, d-2*b), bevelEnabled:true, bevelThickness:b, bevelSize:b, bevelSegments:6, curveSegments:28});
+export function slab(w, h, d, r, b, curveSegments = 28, bevelSegments = 6){
+  const g = new THREE.ExtrudeGeometry(rrShape(w-2*b, h-2*b, Math.max(.002, r-b)), {depth:Math.max(.001, d-2*b), bevelEnabled:true, bevelThickness:b, bevelSize:b, bevelSegments, curveSegments});
   g.translate(0, 0, -(d-2*b)/2); return g;
 }
 
