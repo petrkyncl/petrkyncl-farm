@@ -35,7 +35,11 @@ const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 // phones and tablets: a lower pixel ratio (their GPUs fill far fewer pixels per frame than a laptop's)
 const TOUCH = matchMedia('(pointer: coarse)').matches;
-renderer.setPixelRatio(Math.min(TOUCH ? 2.25 : 2, devicePixelRatio||1));
+// Resolution: a pixel budget first (a 1440p retina window is 15 million pixels; the wall's 260 phone screens each draw an
+// app per pixel, too much for a mid-range GPU), then adapted to what the GPU keeps up with (adaptResolution).
+const PX_BUDGET = TOUCH ? 3.2e6 : 6e6;
+const prCap = () => Math.min(TOUCH ? 2.25 : 2, devicePixelRatio || 1, Math.sqrt(PX_BUDGET/(innerWidth*innerHeight)));
+renderer.setPixelRatio(prCap());
 renderer.toneMapping = THREE.NeutralToneMapping;
 const scene = new THREE.Scene();
 const room = new THREE.Color('#06070a');
@@ -240,9 +244,11 @@ const reelShown = { reel: null, a: -1, b: -1 };
 function paintReel(reel, st){
   const at = reel.at, k = beatAt(at, st);
   const next = Math.min(k + 1, at.length - 1), f = next > k ? clamp01((st - (at[next] - REEL_SWEEP))/REEL_SWEEP) : 0;
-  const isVideo = i => reel.items[i].src === 'video';
-  // repaint only what changed (the video every frame it's on)
+  // repaint only what changed (the video when it has a new frame: it's 30 fps, the page runs at 60 or 120)
+  const vt = REEL.video ? REEL.video.currentTime : 0, vNew = vt !== reelShown.vt;
+  const isVideo = i => reel.items[i].src === 'video' && vNew;
   if (reelShown.reel !== reel || reelShown.a !== k || isVideo(k)){ drawReelItem(reel.items[k], faceG); faceTex.needsUpdate = true; }
+  reelShown.vt = vt;
   // the next item is only remembered as painted when it really was (at a reel's last item there is no next, and the
   // canvas still holds whatever the other reel left in it: scrolling back must not flip to that)
   if (next !== k && (reelShown.reel !== reel || reelShown.b !== next || isVideo(next))){ drawReelItem(reel.items[next], faceG2); faceTex2.needsUpdate = true; reelShown.b = next; }
@@ -2025,7 +2031,8 @@ const flashEl = document.getElementById('flash');
 // ---------- post ----------
 // the composer renders into a multisampled target: without it the post chain drops the canvas's antialiasing
 // and long edges (the desk, phone rims) step visibly
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: TOUCH ? 0 : 4 }));
+// MSAA: 4× only on a 1× screen; on retina the pixels already do most of the antialiasing, 2× is plenty
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: TOUCH ? 0 : (devicePixelRatio || 1) >= 1.5 ? 2 : 4 }));
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .42, .9);
 composer.addPass(bloom);
@@ -2062,11 +2069,12 @@ function updateHead(st, t){
   head.group.rotation.set(-pmy*.12, -.6 - (1 - k)*.9 + pmx*.4 + Math.sin(t*.3)*.05, 0);
   return k;
 }
-// phones: the resolution adapts to what the GPU manages (a heavy scene steps it down, a calm one brings it back up)
-const PR_MAX = Math.min(TOUCH ? 2.25 : 2, devicePixelRatio || 1), PR_MIN = Math.min(1.25, PR_MAX);
-let prNow = Math.min(TOUCH ? 2.25 : 2, devicePixelRatio || 1), dtEma = 16.7, prT = 0;
+// the resolution adapts to what the GPU manages, on every device: a heavy stretch steps it down, a calm one brings it
+// back up to the budget (a fast Mac stays sharp, a slower one stays smooth)
+let PR_MAX = prCap(), PR_MIN = Math.min(TOUCH ? 1.25 : 1, PR_MAX);
+let prNow = PR_MAX, dtEma = 16.7, prT = 0;
 function adaptResolution(dtMs, now){
-  if (!TOUCH) return;
+  if (dtMs > 250) return; // a tab switch or a hitch, not the GPU
   dtEma += (dtMs - dtEma)*.05;
   if (now - prT < 900) return;
   let want = prNow;
@@ -2075,6 +2083,8 @@ function adaptResolution(dtMs, now){
   if (want !== prNow){ prNow = want; prT = now; renderer.setPixelRatio(prNow); composer.setPixelRatio(prNow); size(); }
 }
 function size(){
+  PR_MAX = prCap(); PR_MIN = Math.min(TOUCH ? 1.25 : 1, PR_MAX);
+  if (prNow > PR_MAX){ prNow = PR_MAX; renderer.setPixelRatio(prNow); composer.setPixelRatio(prNow); }
   renderer.setSize(innerWidth, innerHeight, false);
   composer.setSize(innerWidth, innerHeight);
   bloom.setSize(innerWidth*(TOUCH ? .3 : .5), innerHeight*(TOUCH ? .3 : .5));
