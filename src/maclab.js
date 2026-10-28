@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { MODEL_URL, LID_PARTS as MAC_LID, PART } from './macbook.js';
 
 const view = (location.hash || '#front').slice(1);
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -23,17 +24,17 @@ if (view === 'frontedge' || view === 'backedge'){
   if (view==='hinge'||view==='lowside'){ cam.fov = view==='hinge' ? 8 : 12; cam.updateProjectionMatrix(); } }
 
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-const gltf = await loader.loadAsync('/models/macbook-pro-14-m5.glb');
+const gltf = await loader.loadAsync(MODEL_URL);
 scene.add(gltf.scene); scene.updateMatrixWorld(true);
 // optional hinge test: ?lid=<radians>&py=<pivot y>&pz=<pivot z>
 const qs = new URLSearchParams(location.search);
 // hinge solver: ?solve — finds the closing angle that lays the lid shell flat, and the pivot that puts the closed
 // lid flush with the base's front edge, sitting on its top
 if (qs.has('solve')){
-  const LID = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC','xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl','WyuoVWKMOcOlXJM'];
+  const LID = MAC_LID;
   const pts = (pred, yMin = -1) => { const out = []; const v = new THREE.Vector3(); gltf.scene.traverse(o => { if (!o.isMesh || !pred(o)) return; const p = o.geometry.attributes.position; for (let i=0;i<p.count;i++){ v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); if (v.y > yMin) out.push(v.y, v.z); } }); return out; };
   // flat part only: the hinge barrel at the bottom of the open lid (y < 3 cm) would skew both metrics
-  const shell = pts(o => o.name === 'KjpcUkkMjGYeXkV', .03), lidP = pts(o => LID.includes(o.name) && o.name !== 'WyuoVWKMOcOlXJM', .025), baseP = pts(o => !LID.includes(o.name));
+  const shell = pts(o => o.name === PART.shell, .03), lidP = pts(o => LID.includes(o.name) && o.name !== PART.lidFoot, .025), baseP = pts(o => !LID.includes(o.name));
   const rot = (arr, a) => { const c = Math.cos(a), s = Math.sin(a), out = new Float64Array(arr.length); for (let i=0;i<arr.length;i+=2){ out[i] = arr[i]*c - arr[i+1]*s; out[i+1] = arr[i]*s + arr[i+1]*c; } return out; };
   const ext = (arr, k) => { let lo = 1e9, hi = -1e9; for (let i=k;i<arr.length;i+=2){ lo = Math.min(lo, arr[i]); hi = Math.max(hi, arr[i]); } return [lo, hi]; };
   // flatness: the shell's height range is smallest when it lies level
@@ -49,11 +50,10 @@ if (qs.has('solve')){
   const c = Math.cos(A), s = Math.sin(A), m00 = 1 - c, m01 = s, m10 = -s, m11 = 1 - c, det = m00*m11 - m01*m10;
   const py = ( m11*ty - m01*tz)/det, pz = (-m10*ty + m00*tz)/det;
   window.solve = { angle:+A.toFixed(5), pivot:[+py.toFixed(5), +pz.toFixed(5)], lidThick:+((ly1-ly0)*1000).toFixed(2), shellH:+((ext(rot(shell,A),0)[1]-ext(rot(shell,A),0)[0])*1000).toFixed(2), baseTop:+top.toFixed(5), lidLen:+((lz1-lz0)*1000).toFixed(2), baseLen:+((bz[1]-bz[0])*1000).toFixed(2) };
-  qs.set('lid', A); qs.set('py', py); qs.set('pz', pz); if (!qs.has('noextra')) qs.set('extra', 'WyuoVWKMOcOlXJM');
-}
+  qs.set('lid', A); qs.set('py', py); qs.set('pz', pz); }
 (qs.get('hide')||'').split(',').filter(Boolean).forEach(n => { const o = gltf.scene.getObjectByName(n); if (o) o.visible = false; });
 if (qs.has('lid') || qs.has('solve')){
-  const LID_PARTS = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC','xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl'];
+  const LID_PARTS = MAC_LID;
   const pivot = new THREE.Group(); pivot.position.set(0, +(qs.get('py') ?? 0), +(qs.get('pz') ?? -.108)); gltf.scene.add(pivot); gltf.scene.updateMatrixWorld(true);
   const extra = (qs.get('extra') || '').split(',').filter(Boolean);
   const lid = []; gltf.scene.traverse(o => { if (o.isMesh && (LID_PARTS.includes(o.name) || extra.includes(o.name))) lid.push(o); });
@@ -64,7 +64,7 @@ if (qs.has('lid') || qs.has('solve')){
   const base = []; gltf.scene.traverse(o => { if (o.isMesh && !lid.includes(o)) base.push(o); });
   const lb = box(lid), bb = box(base);
   // also the lid's outer shell alone, to judge how flat it lies
-  const shell = box(lid.filter(o => o.name === 'KjpcUkkMjGYeXkV'));
+  const shell = box(lid.filter(o => o.name === PART.shell));
   const r = a => a.toArray().map(v => +v.toFixed(5));
   window.lidBox = { lid:[r(lb.min), r(lb.max)], shell:[r(shell.min), r(shell.max)], base:[r(bb.min), r(bb.max)] };
   // which lid meshes end up behind the base's back edge once closed

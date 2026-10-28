@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { MODEL_URL, LID_PARTS, LID_SHUT, PIVOT, PART, MAT, SCREEN_UV_FLIP } from './macbook.js';
 
 const clamp01 = v => v<0 ? 0 : v>1 ? 1 : v;
 const smooth = (a,b,t) => { t = clamp01((t-a)/(b-a)); return t*t*(3-2*t); };
@@ -155,21 +156,19 @@ export function createDesk({ envTex, nameTex, stacked }){
       }`
   });
 
-  // ---------- the MacBook Pro 14" (M5, Space Black) ----------
+  // ---------- the MacBook Pro 14" (Space Black) ----------
   // The model ships with the lid open at ~110°. Its lid parts get re-parented under a pivot on the hinge axis so the
   // lid can close and open. Angle and pivot were solved in /mac-lab.html?solve: the angle that lays the lid's flat
-  // shell level, and the pivot that closes it flush with the base's front edge, resting on the deck.
-  const LID_PARTS = ['KjpcUkkMjGYeXkV','JNlPAPsywCtwJrd','QSjoCOCzvxPnLpK','LQtuXuSGFKsUXjP','nAIWMiVEtSYdjdZ','tfTbkkzhxqpKRgC',
-    'xiLiwJHfkqIwaTs','LBeBZdkKmrJVhJd','OCxZAMeEkQKexHA','XodVrcYKiUPGCmX','eFpSjyrDhTgtyuf','MwJmMcLbTBwQpxl','WyuoVWKMOcOlXJM'];
-  const LID_SHUT = 1.92008, PIVOT = [-.00078, -.10748], Y = new THREE.Vector3(0, 1, 0);
-  let macPivot = null, hingeCover = null, keyLegends = null;
+  // shell level, and the pivot that closes it flush with the base's front edge, resting on the deck. See macbook.js.
+  const Y = new THREE.Vector3(0, 1, 0);
+  let macPivot = null, hinge = [], keyLegends = null;
   const mac = new THREE.Group(); mac.position.set(.5, .09, 1.3); mac.rotation.y = -.06; scene.add(mac);
   // dive target: centre and facing of the open screen, in desk space (known from the model, valid before it loads)
-  const SCREEN_C = new THREE.Vector3(0, .105, -.1515).multiplyScalar(10).applyAxisAngle(Y, mac.rotation.y).add(mac.position);
+  const SCREEN_C = new THREE.Vector3(0, .1056, -.1569).multiplyScalar(10).applyAxisAngle(Y, mac.rotation.y).add(mac.position);
   const SCREEN_N = new THREE.Vector3(0, .376, .926).applyAxisAngle(Y, mac.rotation.y);
   const C_EYE = SCREEN_C.clone().addScaledVector(SCREEN_N, .3);
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  loader.loadAsync('/models/macbook-pro-14-m5.glb').then(gltf => {
+  loader.loadAsync(MODEL_URL).then(gltf => {
     const model = gltf.scene; model.scale.setScalar(10); mac.add(model);
     const pivot = new THREE.Group(); pivot.position.set(0, PIVOT[0], PIVOT[1]); model.add(pivot);
     mac.updateMatrixWorld(true);
@@ -179,16 +178,20 @@ export function createDesk({ envTex, nameTex, stacked }){
     model.traverse(o => {
       if (!o.isMesh || !('envMap' in o.material)) return;
       const m = o.material; m.envMap = envTex; m.envMapIntensity = .35;
-      if (m.name === 'zNRfbdNyoCOxSDD') m.color.setHex(0x3e3d40);
-      if (m.name === 'pKaDkdyuuvylYHt'){ m.roughness = .22; m.envMapIntensity = .25; m.color.setHex(0x1c1c1e); }
+      if (MAT.aluminium.includes(m.name)) m.color.setHex(0x3e3d40);
+      if (MAT.ports.includes(m.name)){ m.color.setHex(0x1a1a1c); m.envMapIntensity = .15; }
+      if (m.name === MAT.trackpad) m.color.setHex(0x343336);
+      if (m.name === MAT.lens){ m.color.setHex(0x0b1020); m.roughness = .35; m.envMapIntensity = .1; }
+      if (m.name === MAT.logo){ m.roughness = .22; m.envMapIntensity = .25; m.color.setHex(0x1c1c1e); }
       m.needsUpdate = true;
     });
-    const screen = lid.find(o => o.name === 'tfTbkkzhxqpKRgC');
-    if (screen) screen.material = screenMat;
-    keyLegends = model.getObjectByName('wyClPAIazRlKQnt'); // key legends: lit by the keyboard backlight
+    const screen = lid.find(o => o.name === PART.screen);
+    if (screen){ screen.material = screenMat; mbUniforms.uFlip.value.fromArray(SCREEN_UV_FLIP); }
+    keyLegends = model.getObjectByName(PART.keyLegends); // key legends: lit by the keyboard backlight
     if (keyLegends){ const km = keyLegends.material = keyLegends.material.clone(); km.emissive = new THREE.Color(0x000000); km.roughness = .9; km.color.setHex(0xbfbfbf); }
-    const caps = model.getObjectByName('LsmCMkPRBVEEGpg'); if (caps) caps.material.roughness = .8; // matte keycaps: no lamp speculars
-    hingeCover = model.getObjectByName('UEFeUEhkJPdlgXF'); // base-side hinge cover: hidden by the lid when open, pokes out behind when shut
+    const caps = model.getObjectByName(PART.keycaps); if (caps) caps.material.roughness = .8; // matte keycaps: no lamp speculars
+    hinge = PART.hinge.map(n => model.getObjectByName(n)).filter(Boolean);
+    PART.camera.forEach(n => { const o = model.getObjectByName(n); if (o){ o.material = o.material.clone(); o.material.color.setHex(0x0a0a0b); o.material.envMapIntensity = .1; } });
     macPivot = pivot; macPivot.rotation.x = LID_SHUT;
   }).catch(e => console.warn('MacBook model failed to load', e));
 
@@ -230,7 +233,7 @@ export function createDesk({ envTex, nameTex, stacked }){
 
     // the MacBook opens, wakes up, keyboard backlight glows, the screen lights the desk
     const open = easeIO(smooth(.24, .52, st));
-    if (macPivot){ macPivot.rotation.x = LID_SHUT*(1 - open); if (hingeCover) hingeCover.visible = macPivot.rotation.x < 1; }
+    if (macPivot){ macPivot.rotation.x = LID_SHUT*(1 - open); hinge.forEach(o => o.visible = macPivot.rotation.x < 1); }
     const pw = smooth(.46, .56, st);
     const flicker = st < .56 && Math.random() > .7 ? .4 : 1;
     mbUniforms.uPow.value = pw*flicker;
