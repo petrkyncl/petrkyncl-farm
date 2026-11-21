@@ -1239,9 +1239,9 @@ function drawAsk(p, t){
 // ---------- Internát, the student app: going out without the paper book ----------
 // Story: Petr is in (the door chip saw him at 16:42). He's due back by 18:00 tonight. He asks to stay out until
 // 22:00, picks Mom, sends it. Mom approves on her phone, the notification lands, tonight's card updates.
-// Look: the brand's own colours from its icon (deep navy and mint), native iOS type and controls, one strong card
+// Look: the brand's own red from its icon (internat.cz, Nov 2026), native iOS type and controls, one strong card
 // for tonight instead of a stack of boxes.
-const NAVY = '#0e2748', NAVY2 = '#15406c', MINT = '#4fe0a0', MINT_D = '#13a067', TXT = '#0b1726', SUB = '#6b7686', SEP = 'rgba(15,35,60,.08)';
+const IN_RED = '#d42a2f', IN_RED2 = '#b81f25', MINT = '#4fe0a0', MINT_D = '#13a067', TXT = '#0b1726', SUB = '#6b7686', SEP = 'rgba(15,35,60,.08)';
 const IN_ICON = new Image(); IN_ICON.onload = () => { uiKey = ''; }; IN_ICON.src = '/media/internat-icon.png';
 // SF-style line glyphs, drawn at (x, y) centre in a box of size s
 function inGlyph(kind, x, y, s, col){
@@ -1274,13 +1274,13 @@ function inHome(s){
   // large title, the date over it, the avatar
   ui.fillStyle = SUB; ui.font = `600 17px ${SF}`; ui.fillText('MONDAY 5 OCTOBER', M + 2, 116);
   ui.fillStyle = TXT; ui.font = `700 46px ${SF}`; ui.fillText('Tonight', M, 160);
-  ui.fillStyle = NAVY; ui.beginPath(); ui.arc(UW - M - 26, 146, 26, 0, Math.PI*2); ui.fill();
+  ui.fillStyle = IN_RED; ui.beginPath(); ui.arc(UW - M - 26, 146, 26, 0, Math.PI*2); ui.fill();
   ui.fillStyle = '#fff'; ui.font = `600 18px ${SF}`; ui.textAlign = 'center'; ui.fillText('PK', UW - M - 26, 147); ui.textAlign = 'left';
 
   // tonight: one navy card with where I am, when I'm due back and the one action that matters
   let y = 206; const H = 340;
   ui.save(); rr(M, y, W, H, 34); ui.clip();
-  const g = ui.createLinearGradient(M, y, M + W, y + H); g.addColorStop(0, NAVY); g.addColorStop(1, NAVY2); ui.fillStyle = g; ui.fillRect(M, y, W, H);
+  const g = ui.createLinearGradient(M, y, M + W, y + H); g.addColorStop(0, IN_RED); g.addColorStop(1, IN_RED2); ui.fillStyle = g; ui.fillRect(M, y, W, H);
   const glow = ui.createRadialGradient(M + W - 40, y + 20, 0, M + W - 40, y + 20, 300); glow.addColorStop(0, 'rgba(79,224,160,.28)'); glow.addColorStop(1, 'rgba(79,224,160,0)'); ui.fillStyle = glow; ui.fillRect(M, y, W, H);
   // the icon's circuit traces, faint, as the card's texture
   ui.strokeStyle = 'rgba(79,224,160,.13)'; ui.lineWidth = 2.4; ui.lineCap = 'round';
@@ -1298,15 +1298,15 @@ function inHome(s){
   ui.fillStyle = 'rgba(255,255,255,.55)'; ui.font = `600 15px ${SF}`; ui.letterSpacing = '1.6px'; ui.fillText('BACK BY', M + 28, y + 100); ui.letterSpacing = '0px';
   if (s.approved){
     ui.fillStyle = 'rgba(79,224,160,.16)'; rr(M + 112, y + 86, 210, 30, 15); ui.fill();
-    inGlyph('check', M + 132, y + 101, 16, MINT);
-    ui.fillStyle = MINT; ui.font = `600 15px ${SF}`; ui.fillText('Approved by Mom', M + 148, y + 102);
+    inGlyph('check', M + 132, y + 101, 16, '#fff');
+    ui.fillStyle = '#fff'; ui.font = `600 15px ${SF}`; ui.fillText('Approved by Mom', M + 148, y + 102);
   }
   ui.fillStyle = '#fff'; ui.font = `300 104px ${SF}`; ui.fillText(s.limit, M + 22, y + 170);
   // time left: a ring
   const left = s.approved ? 5 + 18/60 : 1 + 18/60, frac = s.approved ? .24 : .62, rcx = M + W - 84, rcy = y + 166;
   ui.lineWidth = 9; ui.lineCap = 'round';
   ui.strokeStyle = 'rgba(255,255,255,.12)'; ui.beginPath(); ui.arc(rcx, rcy, 50, 0, Math.PI*2); ui.stroke();
-  ui.strokeStyle = s.approved ? MINT : '#ffc36b'; ui.beginPath(); ui.arc(rcx, rcy, 50, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - frac)); ui.stroke();
+  ui.strokeStyle = s.approved ? '#fff' : '#ffc36b'; ui.beginPath(); ui.arc(rcx, rcy, 50, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - frac)); ui.stroke();
   ui.fillStyle = '#fff'; ui.font = `600 22px ${SF}`; ui.textAlign = 'center'; ui.fillText(`${Math.floor(left)}:${String(Math.round((left % 1)*60)).padStart(2, '0')}`, rcx, rcy - 8);
   ui.fillStyle = 'rgba(255,255,255,.55)'; ui.font = `500 14px ${SF}`; ui.fillText('left', rcx, rcy + 16); ui.textAlign = 'left';
   // the action, or the request in flight
@@ -1321,9 +1321,9 @@ function inHome(s){
   } else {
     const pk = 1 - .05*s.press;
     ui.save(); ui.translate(M + 22 + bw/2, by + 36); ui.scale(pk, pk);
-    ui.fillStyle = s.press > 0 ? '#3fcf90' : MINT; rr(-bw/2, -36, bw, 72, 36); ui.fill();
-    inGlyph('moon', -96, 0, 26, NAVY);
-    ui.fillStyle = NAVY; ui.font = `600 21px ${SF}`; ui.textAlign = 'center'; ui.fillText('Stay out later', 12, 1); ui.textAlign = 'left';
+    ui.fillStyle = s.press > 0 ? '#f3f3f3' : '#fff'; rr(-bw/2, -36, bw, 72, 36); ui.fill();
+    inGlyph('moon', -96, 0, 26, IN_RED);
+    ui.fillStyle = IN_RED; ui.font = `600 21px ${SF}`; ui.textAlign = 'center'; ui.fillText('Stay out later', 12, 1); ui.textAlign = 'left';
     ui.restore();
   }
 
@@ -1331,25 +1331,25 @@ function inHome(s){
   y += H + 40;
   ui.fillStyle = TXT; ui.font = `700 24px ${SF}`; ui.fillText('Today', M + 4, y); y += 24;
   const rows = s.approved
-    ? [['moon', [ 'rgba(79,224,160,.18)', MINT_D ], 'Out until 22:00', 'Approved by Mom', '17:44'], ['door', ['rgba(14,39,72,.07)', NAVY], 'Checked in', 'Main door · chip', '16:42']]
-    : [['door', ['rgba(14,39,72,.07)', NAVY], 'Checked in', 'Main door · chip', '16:42'], ['out', ['rgba(14,39,72,.07)', NAVY], 'Left for school', 'Main door · chip', '07:31']];
+    ? [['moon', [ 'rgba(79,224,160,.18)', MINT_D ], 'Out until 22:00', 'Approved by Mom', '17:44'], ['door', ['rgba(212,42,47,.08)', IN_RED], 'Checked in', 'Main door · chip', '16:42']]
+    : [['door', ['rgba(212,42,47,.08)', IN_RED], 'Checked in', 'Main door · chip', '16:42'], ['out', ['rgba(212,42,47,.08)', IN_RED], 'Left for school', 'Main door · chip', '07:31']];
   ui.fillStyle = '#fff'; rr(M, y, W, 152, 22); ui.fill();
   rows.forEach(([gl, tint, t1, t2, tm], i) => { inRow(M, y + i*76, W, gl, tint, t1, t2, tm, false); if (!i){ ui.fillStyle = SEP; ui.fillRect(M + 78, y + 76, W - 78, 1.4); } });
   y += 152 + 40;
   ui.fillStyle = TXT; ui.font = `700 24px ${SF}`; ui.fillText('This week', M + 4, y); y += 24;
   ui.fillStyle = '#fff'; rr(M, y, W, 152, 22); ui.fill();
-  inRow(M, y, W, 'bag', ['rgba(14,39,72,.07)', NAVY], 'Going home', 'Friday, after school', 'Fri', true);
+  inRow(M, y, W, 'bag', ['rgba(212,42,47,.08)', IN_RED], 'Going home', 'Friday, after school', 'Fri', true);
   ui.fillStyle = SEP; ui.fillRect(M + 78, y + 76, W - 78, 1.4);
-  inRow(M, y + 76, W, 'home', ['rgba(14,39,72,.07)', NAVY], 'Weekend stay', 'Staying in Prague?', '', true);
+  inRow(M, y + 76, W, 'home', ['rgba(212,42,47,.08)', IN_RED], 'Weekend stay', 'Staying in Prague?', '', true);
 
   // the floating glass tab bar
   const tb = UH - 132, tw = 330, tx = UW/2 - tw/2;
   ui.save(); ui.shadowColor = 'rgba(14,39,72,.14)'; ui.shadowBlur = 30; ui.shadowOffsetY = 8;
   ui.fillStyle = 'rgba(255,255,255,.92)'; rr(tx, tb, tw, 76, 38); ui.fill(); ui.restore();
   ui.strokeStyle = 'rgba(14,39,72,.06)'; ui.lineWidth = 1.2; rr(tx, tb, tw, 76, 38); ui.stroke();
-  ui.fillStyle = 'rgba(14,39,72,.07)'; rr(tx + 6, tb + 6, 106, 64, 32); ui.fill();
+  ui.fillStyle = 'rgba(212,42,47,.08)'; rr(tx + 6, tb + 6, 106, 64, 32); ui.fill();
   [['moon', 'Tonight'], ['clock', 'History'], ['person', 'Profile']].forEach(([gl, lb], i) => {
-    const cx = tx + 59 + i*106, on = i === 0, col = on ? NAVY : '#8a93a0';
+    const cx = tx + 59 + i*106, on = i === 0, col = on ? IN_RED : '#8a93a0';
     inGlyph(gl, cx, tb + 30, 24, col);
     ui.fillStyle = col; ui.font = `${on ? 600 : 500} 13px ${SF}`; ui.textAlign = 'center'; ui.fillText(lb, cx, tb + 58); ui.textAlign = 'left';
   });
@@ -1383,7 +1383,7 @@ function drawInternat(p, t){
     const sent = smooth(.44, .47, p);
     ui.globalAlpha = 1 - sent;
     ui.textBaseline = 'middle';
-    ui.fillStyle = NAVY; ui.font = `400 20px ${SF}`; ui.fillText('Cancel', 30, y0 + 58);
+    ui.fillStyle = IN_RED; ui.font = `400 20px ${SF}`; ui.fillText('Cancel', 30, y0 + 58);
     ui.fillStyle = TXT; ui.font = `600 22px ${SF}`; ui.textAlign = 'center'; ui.fillText('Stay out later', UW/2, y0 + 58);
     ui.fillStyle = SUB; ui.font = `400 18px ${SF}`; ui.fillText('Mom or Dad approves it on their phone.', UW/2, y0 + 112); ui.textAlign = 'left';
     inWheel(UW/2, y0 + 262, 18 + 4*easeIO(clamp01((p - .2)/.13)));
@@ -1396,12 +1396,12 @@ function drawInternat(p, t){
     ui.fillStyle = SUB; ui.font = `400 16px ${SF}`; ui.fillText('No arrivals between 1:00 and 5:00.', UW/2, sy + 96); ui.textAlign = 'left';
     const sp = smooth(.4, .42, p)*(1 - smooth(.43, .45, p));
     ui.save(); ui.translate(UW/2, y0 + 610); ui.scale(1 - .04*sp, 1 - .04*sp);
-    ui.fillStyle = sp > 0 ? NAVY2 : NAVY; rr(-(UW - 60)/2, -36, UW - 60, 72, 36); ui.fill(); ui.fillStyle = '#fff'; ui.font = `600 21px ${SF}`; ui.textAlign = 'center'; ui.fillText('Send to Mom', 0, 1); ui.restore(); ui.textAlign = 'left';
+    ui.fillStyle = sp > 0 ? IN_RED2 : IN_RED; rr(-(UW - 60)/2, -36, UW - 60, 72, 36); ui.fill(); ui.fillStyle = '#fff'; ui.font = `600 21px ${SF}`; ui.textAlign = 'center'; ui.fillText('Send to Mom', 0, 1); ui.restore(); ui.textAlign = 'left';
     ui.globalAlpha = sent;
     if (sent > 0){
       const cy = y0 + 250, k = outBack(sent);
       ui.fillStyle = MINT; ui.beginPath(); ui.arc(UW/2, cy, 58*k, 0, Math.PI*2); ui.fill();
-      inGlyph('check', UW/2, cy, 54*k, NAVY);
+      inGlyph('check', UW/2, cy, 54*k, IN_RED);
       ui.fillStyle = TXT; ui.font = `700 32px ${SF}`; ui.textAlign = 'center'; ui.fillText('Sent to Mom', UW/2, cy + 116);
       ui.fillStyle = SUB; ui.font = `400 19px ${SF}`; ui.fillText('You’ll get a notification when she answers.', UW/2, cy + 156); ui.textAlign = 'left';
     }
@@ -1568,7 +1568,7 @@ function appIcon(kind, x, y, s){
   g.save();
   switch (kind){
     case 'recents': fill('#121316'); g.fillStyle = '#ffb547'; for (let i=0;i<7;i++){ const h = s*(.12 + .3*Math.abs(Math.sin(i*1.9 + 1))); rr(x - s*.3 + i*s*.1, y - h/2, s*.055, h, s*.03); g.fill(); } break;
-    case 'internat': fill('#ffffff'); if (IN_ICON.complete && IN_ICON.naturalWidth){ g.save(); rr(x - s/2, y - s/2, s, s, r); g.clip(); g.drawImage(IN_ICON, x - s*.62, y - s*.62, s*1.24, s*1.24); g.restore(); } break; // the real icon (~/Downloads/internat.png)
+    case 'internat': fill('#ffffff'); if (IN_ICON.complete && IN_ICON.naturalWidth){ g.save(); rr(x - s/2, y - s/2, s, s, r); g.clip(); g.drawImage(IN_ICON, x - s/2, y - s/2, s, s); g.restore(); } break; // the real icon (internat-app/app/icon.svg)
     case 'wear': fill('#f3ece2'); wcMark(g, x, y, s*.42); break; // the app icon: the mark on a cream tile, 42% tall
     case 'cal': fill('#ffffff'); g.fillStyle = '#ff3b30'; g.font = `600 ${s*.15}px ${SF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SUN', x, y - s*.26); g.fillStyle = '#111'; g.font = `300 ${s*.48}px ${SF}`; g.fillText('5', x, y + s*.1); break;
     case 'photos': fill('#ffffff'); ['#f9b233','#f26b3a','#e5426f','#a54bd2','#4a7cf0','#34b2e4','#4ac57b','#b3d334'].forEach((c,i) => { g.save(); g.translate(x, y); g.rotate(i*Math.PI/4); g.fillStyle = c; g.globalAlpha = .85; g.beginPath(); g.ellipse(0, -s*.17, s*.09, s*.17, 0, 0, Math.PI*2); g.fill(); g.restore(); }); break;
